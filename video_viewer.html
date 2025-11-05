@@ -142,7 +142,20 @@
     <div class="video-grid" id="videoGrid"></div>
     <div class="status" id="status">urls.csv を読み込んでいます...</div>
 
+    <div class="controls" style="margin-top: 20px;">
+        <div class="control-group">
+            <label for="loadCount">追加で読み込む件数:</label>
+            <input type="number" id="loadCount" min="1" max="100" value="20" style="width: 100px; padding: 5px; background-color: #3a3a3a; border: 1px solid #4a4a4a; color: #fff; border-radius: 4px; margin-right: 10px;">
+            <button id="loadMoreBtn" style="padding: 8px 20px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">追加で読み込む</button>
+            <span id="loadInfo" style="margin-left: 15px; color: #888;"></span>
+        </div>
+    </div>
+
     <script>
+        // グローバル変数
+        let allUrls = [];
+        let currentIndex = 0;
+        const defaultLoadCount = 20;
 
         // Dropbox URL変換関数
         function convertDropboxUrl(url) {
@@ -191,13 +204,12 @@
             return urls;
         }
 
-        // 動画グリッド作成
-        function createVideoGrid(urls) {
+        // 動画グリッドに追加
+        function loadMoreVideos(count) {
             const grid = document.getElementById('videoGrid');
             const status = document.getElementById('status');
-            grid.innerHTML = '';
 
-            if (urls.length === 0) {
+            if (allUrls.length === 0) {
                 status.textContent = '有効なURLが見つかりませんでした';
                 status.style.display = 'block';
                 return;
@@ -205,7 +217,12 @@
 
             status.style.display = 'none';
 
-            urls.forEach((originalUrl, index) => {
+            // 読み込む範囲を決定
+            const endIndex = Math.min(currentIndex + count, allUrls.length);
+            const urlsToLoad = allUrls.slice(currentIndex, endIndex);
+
+            urlsToLoad.forEach((originalUrl, relativeIndex) => {
+                const absoluteIndex = currentIndex + relativeIndex;
                 const convertedUrl = convertDropboxUrl(originalUrl);
                 if (!convertedUrl) return;
 
@@ -218,7 +235,7 @@
                 video.loop = true;
                 video.muted = true;
                 video.playsInline = true;
-                video.playbackRate = 1.0;
+                video.playbackRate = parseFloat(document.getElementById('globalSpeed').value);
 
                 const controls = document.createElement('div');
                 controls.className = 'video-controls';
@@ -230,12 +247,12 @@
                 speedSlider.type = 'range';
                 speedSlider.min = '0.1';
                 speedSlider.max = '3.0';
-                speedSlider.value = '1.0';
+                speedSlider.value = video.playbackRate.toString();
                 speedSlider.step = '0.1';
 
                 const speedValue = document.createElement('span');
                 speedValue.className = 'slider-value';
-                speedValue.textContent = '1.0x';
+                speedValue.textContent = video.playbackRate.toFixed(1) + 'x';
 
                 speedSlider.addEventListener('input', (e) => {
                     const speed = parseFloat(e.target.value);
@@ -253,11 +270,32 @@
 
                 // 動画の読み込みエラー処理
                 video.addEventListener('error', (e) => {
-                    console.error(`動画${index + 1}の読み込みエラー:`, convertedUrl);
+                    console.error(`動画${absoluteIndex + 1}の読み込みエラー:`, convertedUrl);
                     videoItem.style.backgroundColor = '#333';
-                    videoItem.innerHTML = `<div style="padding: 20px; text-align: center; color: #888;">動画${index + 1}<br/>読み込みエラー</div>`;
+                    videoItem.innerHTML = `<div style="padding: 20px; text-align: center; color: #888;">動画${absoluteIndex + 1}<br/>読み込みエラー</div>`;
                 });
             });
+
+            currentIndex = endIndex;
+            updateLoadInfo();
+        }
+
+        // 読み込み情報を更新
+        function updateLoadInfo() {
+            const loadInfo = document.getElementById('loadInfo');
+            const remaining = allUrls.length - currentIndex;
+            loadInfo.textContent = `表示中: ${currentIndex}/${allUrls.length}件 (残り: ${remaining}件)`;
+
+            const loadMoreBtn = document.getElementById('loadMoreBtn');
+            if (remaining === 0) {
+                loadMoreBtn.disabled = true;
+                loadMoreBtn.style.backgroundColor = '#666';
+                loadMoreBtn.style.cursor = 'not-allowed';
+            } else {
+                loadMoreBtn.disabled = false;
+                loadMoreBtn.style.backgroundColor = '#007bff';
+                loadMoreBtn.style.cursor = 'pointer';
+            }
         }
 
         // タイルサイズ変更
@@ -286,6 +324,12 @@
             });
         });
 
+        // 追加で読み込むボタンのイベントリスナー
+        document.getElementById('loadMoreBtn').addEventListener('click', () => {
+            const count = parseInt(document.getElementById('loadCount').value) || 20;
+            loadMoreVideos(count);
+        });
+
         // ページ読み込み時にCSVデータを読み込み
         window.addEventListener('load', () => {
             // urls.csvを読み込む
@@ -296,8 +340,10 @@
                 })
                 .then(text => {
                     console.log('urls.csvを読み込みました');
-                    const urls = parseCSV(text);
-                    createVideoGrid(urls);
+                    allUrls = parseCSV(text);
+                    currentIndex = 0;
+                    // 最初にデフォルト件数を読み込み
+                    loadMoreVideos(defaultLoadCount);
                 })
                 .catch(err => {
                     console.error('urls.csv読み込みエラー:', err.message);

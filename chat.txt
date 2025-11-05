@@ -5,3 +5,4 @@
 2025-11-05 19:15 要求: CSV出力先分離（urls_tmp.csv→urls.csv） / 結果: list-links.js出力先をurls_tmp.csvに変更、video_viewer.htmlはurls.csv読込維持
 2025-11-05 19:19 要求: README.md更新、GitHubプッシュ / 結果: README.md実ファイル構成反映、urls.csv記載修正、ファイル構成・要件セクション追加完了
 2025-11-05 10:31 要求: URL取得～表示手順マニュアル化 / 結果: MANUAL.md作成、list-links.js→urls_tmp.csv→urls.csv→ビューア表示ワークフロー記載完了
+2025-11-05 19:40 要求: 動画読み込みページング実装（デフォルト20件、追加読み込み機能） / 結果: video_viewer.html：初期20件表示、数値入力+「追加で読み込む」ボタン実装完了

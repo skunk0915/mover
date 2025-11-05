@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dropbox Video Viewer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #1a1a1a;
+            color: #ffffff;
+            padding: 20px;
+        }
+
+        .controls {
+            background-color: #2a2a2a;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+        }
+
+        .control-group {
+            margin-bottom: 15px;
+        }
+
+        .control-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            height: 6px;
+            background: #4a4a4a;
+            outline: none;
+            border-radius: 3px;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            background: #007bff;
+            cursor: pointer;
+            border-radius: 50%;
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            background: #007bff;
+            cursor: pointer;
+            border-radius: 50%;
+            border: none;
+        }
+
+        .slider-value {
+            display: inline-block;
+            margin-left: 10px;
+            font-weight: bold;
+            color: #007bff;
+        }
+
+        .video-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 0;
+        }
+
+        .video-item {
+            position: relative;
+            background-color: #000000;
+            overflow: hidden;
+        }
+
+        .video-item video {
+            width: 100%;
+            height: 100%;
+            display: block;
+            object-fit: cover;
+        }
+
+        .video-controls {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 5px 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .video-controls label {
+            font-size: 12px;
+            white-space: nowrap;
+        }
+
+        .video-controls input[type="range"] {
+            flex: 1;
+            height: 4px;
+        }
+
+        .video-controls .slider-value {
+            font-size: 12px;
+            margin-left: 5px;
+            min-width: 35px;
+        }
+
+        .status {
+            text-align: center;
+            padding: 20px;
+            font-size: 18px;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <h1 style="margin-bottom: 20px;">Dropbox Video Viewer</h1>
+
+        <div class="control-group">
+            <label for="tileSize">タイルサイズ: <span class="slider-value" id="tileSizeValue">300px</span></label>
+            <input type="range" id="tileSize" min="100" max="800" value="300" step="10" />
+        </div>
+
+        <div class="control-group">
+            <label for="globalSpeed">全体再生速度: <span class="slider-value" id="globalSpeedValue">1.0x</span></label>
+            <input type="range" id="globalSpeed" min="0.1" max="3.0" value="1.0" step="0.1" />
+        </div>
+    </div>
+
+    <div class="video-grid" id="videoGrid"></div>
+    <div class="status" id="status">dropbox_url.csv を読み込んでいます...</div>
+
+    <script>
+        // CSVデータを埋め込み（dropbox_url.csvの内容）
+        const CSV_DATA = `1→https://www.dropbox.com/scl/fi/s0ckwzs2sktk1qazd4uoc/F9E764B9-AD04-405E-BA28-F2673FBBCCC3-2.MP4?rlkey=o41nq0mz7rkc3298iavhskcmf&st=jpl3c5c4&dl=0
+2→https://www.dropbox.com/scl/fi/7xslxqt89akumvsprw2pq/F5D204A2-4470-4434-9FB2-5B65CDEE15FF-2.MP4?rlkey=39nc2w1cstftk0sy4s2rzkvr4&st=zl3ozxli&dl=0
+3→https://www.dropbox.com/scl/fi/vurdxlem2tdoc89m44byp/EF61F37D-8B16-49F3-BF08-A383BF1DB189-2.MP4?rlkey=zwz9cwqnn1ad7cw86aux54glk&st=f5zxggtm&dl=0
+4→https://www.dropbox.com/scl/fi/toowjdc700jlj12nac4lm/EEEE5844-041A-49A6-8026-B6B7704DBCA3-2.MP4?rlkey=iegpfoko27l9pvin0unytbye9&st=i5fev4zx&dl=0
+5→https://www.dropbox.com/scl/fi/lf2qmpuml7g2afzfltsr0/EE970654-4E38-4EE3-840D-00CF02478B4A-2.MP4?rlkey=eyskksjnjegrded507f40rgju&st=3p43q6k1&dl=0
+6→https://www.dropbox.com/scl/fi/y5p7yird00ocg6510er7g/edde37bd-995c-4d0b-8129-75844717e93e-video-4.MP4?rlkey=b9ornowlpduzyei5nrrkht1ta&st=dutoz5ct&dl=0
+7→https://www.dropbox.com/scl/fi/y5p7yird00ocg6510er7g/edde37bd-995c-4d0b-8129-75844717e93e-video-4.MP4?rlkey=b9ornowlpduzyei5nrrkht1ta&st=vig3msj9&dl=0`;
+
+        // Dropbox URL変換関数
+        function convertDropboxUrl(url) {
+            try {
+                const urlObj = new URL(url);
+
+                // ホストをdl.dropboxusercontent.comに変更
+                if (urlObj.hostname === 'www.dropbox.com' ||
+                    urlObj.hostname === 'dropbox.com' ||
+                    urlObj.hostname === 'dl.dropbox.com') {
+                    urlObj.hostname = 'dl.dropboxusercontent.com';
+                }
+
+                // rlkeyのみ残して他のクエリパラメータを削除
+                const rlkey = urlObj.searchParams.get('rlkey');
+                urlObj.search = '';
+                if (rlkey) {
+                    urlObj.searchParams.set('rlkey', rlkey);
+                }
+
+                // httpsに統一
+                urlObj.protocol = 'https:';
+
+                return urlObj.toString();
+            } catch (e) {
+                console.error('URL変換エラー:', e, url);
+                return null;
+            }
+        }
+
+        // CSVパース関数
+        function parseCSV(text) {
+            const lines = text.split('\n');
+            const urls = [];
+
+            for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed) continue;
+
+                // "番号→URL" 形式をパース
+                const parts = trimmed.split('→');
+                if (parts.length >= 2) {
+                    const url = parts[1].trim();
+                    if (url && url.startsWith('http')) {
+                        urls.push(url);
+                    }
+                }
+            }
+
+            return urls;
+        }
+
+        // 動画グリッド作成
+        function createVideoGrid(urls) {
+            const grid = document.getElementById('videoGrid');
+            const status = document.getElementById('status');
+            grid.innerHTML = '';
+
+            if (urls.length === 0) {
+                status.textContent = '有効なURLが見つかりませんでした';
+                status.style.display = 'block';
+                return;
+            }
+
+            status.style.display = 'none';
+
+            urls.forEach((originalUrl, index) => {
+                const convertedUrl = convertDropboxUrl(originalUrl);
+                if (!convertedUrl) return;
+
+                const videoItem = document.createElement('div');
+                videoItem.className = 'video-item';
+
+                const video = document.createElement('video');
+                video.src = convertedUrl;
+                video.autoplay = true;
+                video.loop = true;
+                video.muted = true;
+                video.playsInline = true;
+                video.playbackRate = 1.0;
+
+                const controls = document.createElement('div');
+                controls.className = 'video-controls';
+
+                const label = document.createElement('label');
+                label.textContent = '速度:';
+
+                const speedSlider = document.createElement('input');
+                speedSlider.type = 'range';
+                speedSlider.min = '0.1';
+                speedSlider.max = '3.0';
+                speedSlider.value = '1.0';
+                speedSlider.step = '0.1';
+
+                const speedValue = document.createElement('span');
+                speedValue.className = 'slider-value';
+                speedValue.textContent = '1.0x';
+
+                speedSlider.addEventListener('input', (e) => {
+                    const speed = parseFloat(e.target.value);
+                    video.playbackRate = speed;
+                    speedValue.textContent = speed.toFixed(1) + 'x';
+                });
+
+                controls.appendChild(label);
+                controls.appendChild(speedSlider);
+                controls.appendChild(speedValue);
+
+                videoItem.appendChild(video);
+                videoItem.appendChild(controls);
+                grid.appendChild(videoItem);
+
+                // 動画の読み込みエラー処理
+                video.addEventListener('error', (e) => {
+                    console.error(`動画${index + 1}の読み込みエラー:`, convertedUrl);
+                    videoItem.style.backgroundColor = '#333';
+                    videoItem.innerHTML = `<div style="padding: 20px; text-align: center; color: #888;">動画${index + 1}<br/>読み込みエラー</div>`;
+                });
+            });
+        }
+
+        // タイルサイズ変更
+        document.getElementById('tileSize').addEventListener('input', (e) => {
+            const size = e.target.value;
+            document.getElementById('tileSizeValue').textContent = size + 'px';
+            document.getElementById('videoGrid').style.gridTemplateColumns =
+                `repeat(auto-fill, minmax(${size}px, 1fr))`;
+        });
+
+        // グローバル再生速度変更
+        document.getElementById('globalSpeed').addEventListener('input', (e) => {
+            const speed = parseFloat(e.target.value);
+            document.getElementById('globalSpeedValue').textContent = speed.toFixed(1) + 'x';
+
+            const videos = document.querySelectorAll('.video-item video');
+            videos.forEach(video => {
+                video.playbackRate = speed;
+            });
+
+            // 個別スライダーも更新
+            const sliders = document.querySelectorAll('.video-controls input[type="range"]');
+            sliders.forEach(slider => {
+                slider.value = speed;
+                slider.nextElementSibling.textContent = speed.toFixed(1) + 'x';
+            });
+        });
+
+        // ページ読み込み時にCSVデータを読み込み
+        window.addEventListener('load', () => {
+            // まずfetchで外部CSVファイルを試みる（サーバー環境用）
+            fetch('dropbox_url.csv')
+                .then(response => {
+                    if (!response.ok) throw new Error('外部CSVファイルなし');
+                    return response.text();
+                })
+                .then(text => {
+                    console.log('外部CSVファイルを読み込みました');
+                    const urls = parseCSV(text);
+                    createVideoGrid(urls);
+                })
+                .catch(err => {
+                    // fetchが失敗した場合は埋め込みデータを使用（ローカル環境用）
+                    console.log('埋め込みCSVデータを使用します:', err.message);
+                    const urls = parseCSV(CSV_DATA);
+                    createVideoGrid(urls);
+                });
+        });
+    </script>
+</body>
+</html>

@@ -6,7 +6,7 @@
 
 import 'dotenv/config';
 import fetch from 'node-fetch';
-import { writeFileSync } from 'node:fs';
+import { writeFileSync, appendFileSync, readFileSync, existsSync } from 'node:fs';
 
 //------------------------------------------------------------
 // 0. 引数・トークン確認
@@ -70,6 +70,10 @@ if (!files.length) {
 // 3. 各ファイルの共有リンク取得／新規生成
 //------------------------------------------------------------
 console.log('\n--- 共有リンク取得／生成 ------------------------------');
+
+// urls_tmp.csvファイルのパス（同じディレクトリ）
+const urlsCsvPath = './urls_tmp.csv';
+
 const table = [];
 
 for (const f of files) {
@@ -100,12 +104,20 @@ for (const f of files) {
     console.log('   ✅ 既存あり  :', f.name);
   }
 
-  // 3-3) “raw” URL へ変換
+  // 3-3) "raw" URL へ変換
   const raw = url
     .replace('www.dropbox.com', 'dl.dropboxusercontent.com')
     .replace('?dl=0', '');
 
   table.push({ name: f.name, raw });
+
+  // 3-4) urls_tmp.csvに1行ずつ追記（中断しても残るように）
+  try {
+    appendFileSync(urlsCsvPath, url + '\n', 'utf8');
+    console.log('   💾 urls_tmp.csvに追記:', f.name);
+  } catch (e) {
+    console.error('   🚨 CSV書き込み失敗:', f.name, e.message);
+  }
 }
 
 //------------------------------------------------------------
@@ -116,3 +128,22 @@ console.table(table);
 
 writeFileSync('dropbox_raw_links.json', JSON.stringify(table, null, 2));
 console.log(`💾 dropbox_raw_links.json に ${table.length} 件を書き出しました`);
+
+//------------------------------------------------------------
+// 5. urls_tmp.csvの重複削除
+//------------------------------------------------------------
+console.log('\n--- urls_tmp.csvの重複削除 ----------------------------');
+if (existsSync(urlsCsvPath)) {
+  try {
+    const content = readFileSync(urlsCsvPath, 'utf8');
+    const lines = content.split('\n').filter(line => line.trim());
+    const uniqueLines = [...new Set(lines)];
+
+    writeFileSync(urlsCsvPath, uniqueLines.join('\n') + '\n', 'utf8');
+    console.log(`✅ urls_tmp.csv: ${lines.length}件 → ${uniqueLines.length}件（重複削除済み）`);
+  } catch (e) {
+    console.error('🚨 重複削除失敗:', e.message);
+  }
+} else {
+  console.log('⚠️  urls_tmp.csvが見つかりませんでした');
+}

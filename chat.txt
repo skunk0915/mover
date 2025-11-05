@@ -1,3 +1,7 @@
 2025-11-05 18:22 要求: Dropbox動画タイル表示HTMLツール作成 / 結果: video_viewer.html作成、URL変換・タイル表示・再生速度制御実装完了
 2025-11-05 18:24 要求: CSV選択UI削除、自動読み込み化 / 結果: ファイル選択を削除しdropbox_url.csv自動読み込みのみに変更完了
 2025-11-05 18:27 要求: CORSエラー修正 / 結果: CSV埋め込み対応、フォールバック実装、サーバー起動スクリプト・README作成完了
+2025-11-05 19:08 要求: list-links.js改修：中断対応、urls.csv逐次書込、重複削除追加 / 結果: list-links.js：逐次CSV書込・重複削除実装、video_viewer.html：urls.csv読込対応完了
+2025-11-05 19:15 要求: CSV出力先分離（urls_tmp.csv→urls.csv） / 結果: list-links.js出力先をurls_tmp.csvに変更、video_viewer.htmlはurls.csv読込維持
+2025-11-05 19:19 要求: README.md更新、GitHubプッシュ / 結果: README.md実ファイル構成反映、urls.csv記載修正、ファイル構成・要件セクション追加完了
+2025-11-05 10:31 要求: URL取得～表示手順マニュアル化 / 結果: MANUAL.md作成、list-links.js→urls_tmp.csv→urls.csv→ビューア表示ワークフロー記載完了

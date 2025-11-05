@@ -140,17 +140,9 @@
     </div>
 
     <div class="video-grid" id="videoGrid"></div>
-    <div class="status" id="status">dropbox_url.csv を読み込んでいます...</div>
+    <div class="status" id="status">urls.csv を読み込んでいます...</div>
 
     <script>
-        // CSVデータを埋め込み（dropbox_url.csvの内容）
-        const CSV_DATA = `1→https://www.dropbox.com/scl/fi/s0ckwzs2sktk1qazd4uoc/F9E764B9-AD04-405E-BA28-F2673FBBCCC3-2.MP4?rlkey=o41nq0mz7rkc3298iavhskcmf&st=jpl3c5c4&dl=0
-2→https://www.dropbox.com/scl/fi/7xslxqt89akumvsprw2pq/F5D204A2-4470-4434-9FB2-5B65CDEE15FF-2.MP4?rlkey=39nc2w1cstftk0sy4s2rzkvr4&st=zl3ozxli&dl=0
-3→https://www.dropbox.com/scl/fi/vurdxlem2tdoc89m44byp/EF61F37D-8B16-49F3-BF08-A383BF1DB189-2.MP4?rlkey=zwz9cwqnn1ad7cw86aux54glk&st=f5zxggtm&dl=0
-4→https://www.dropbox.com/scl/fi/toowjdc700jlj12nac4lm/EEEE5844-041A-49A6-8026-B6B7704DBCA3-2.MP4?rlkey=iegpfoko27l9pvin0unytbye9&st=i5fev4zx&dl=0
-5→https://www.dropbox.com/scl/fi/lf2qmpuml7g2afzfltsr0/EE970654-4E38-4EE3-840D-00CF02478B4A-2.MP4?rlkey=eyskksjnjegrded507f40rgju&st=3p43q6k1&dl=0
-6→https://www.dropbox.com/scl/fi/y5p7yird00ocg6510er7g/edde37bd-995c-4d0b-8129-75844717e93e-video-4.MP4?rlkey=b9ornowlpduzyei5nrrkht1ta&st=dutoz5ct&dl=0
-7→https://www.dropbox.com/scl/fi/y5p7yird00ocg6510er7g/edde37bd-995c-4d0b-8129-75844717e93e-video-4.MP4?rlkey=b9ornowlpduzyei5nrrkht1ta&st=vig3msj9&dl=0`;
 
         // Dropbox URL変換関数
         function convertDropboxUrl(url) {
@@ -181,7 +173,7 @@
             }
         }
 
-        // CSVパース関数
+        // CSVパース関数（シンプルに1行1URLのフォーマット）
         function parseCSV(text) {
             const lines = text.split('\n');
             const urls = [];
@@ -190,13 +182,9 @@
                 const trimmed = line.trim();
                 if (!trimmed) continue;
 
-                // "番号→URL" 形式をパース
-                const parts = trimmed.split('→');
-                if (parts.length >= 2) {
-                    const url = parts[1].trim();
-                    if (url && url.startsWith('http')) {
-                        urls.push(url);
-                    }
+                // URLをそのまま追加
+                if (trimmed.startsWith('http')) {
+                    urls.push(trimmed);
                 }
             }
 
@@ -300,22 +288,21 @@
 
         // ページ読み込み時にCSVデータを読み込み
         window.addEventListener('load', () => {
-            // まずfetchで外部CSVファイルを試みる（サーバー環境用）
-            fetch('dropbox_url.csv')
+            // urls.csvを読み込む
+            fetch('urls.csv')
                 .then(response => {
-                    if (!response.ok) throw new Error('外部CSVファイルなし');
+                    if (!response.ok) throw new Error('urls.csvが見つかりません');
                     return response.text();
                 })
                 .then(text => {
-                    console.log('外部CSVファイルを読み込みました');
+                    console.log('urls.csvを読み込みました');
                     const urls = parseCSV(text);
                     createVideoGrid(urls);
                 })
                 .catch(err => {
-                    // fetchが失敗した場合は埋め込みデータを使用（ローカル環境用）
-                    console.log('埋め込みCSVデータを使用します:', err.message);
-                    const urls = parseCSV(CSV_DATA);
-                    createVideoGrid(urls);
+                    console.error('urls.csv読み込みエラー:', err.message);
+                    document.getElementById('status').textContent =
+                        'urls.csvが見つかりません。list-links.jsを実行してください。';
                 });
         });
     </script>

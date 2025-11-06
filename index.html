@@ -304,33 +304,60 @@
             font-size: 24px;
             font-weight: bold;
             color: #007bff;
-            margin-bottom: 10px;
+            margin-bottom: 15px;
         }
 
-        .data-usage-daily {
+        .data-usage-table-container {
             max-height: 300px;
-            overflow-y: auto;
+            overflow-y: scroll;
+            border: 1px solid #3a3a3a;
+            border-radius: 4px;
         }
 
-        .data-usage-item {
-            display: flex;
-            justify-content: space-between;
-            padding: 8px 0;
-            border-bottom: 1px solid #3a3a3a;
+        .data-usage-table {
+            width: 100%;
+            border-collapse: collapse;
             font-size: 13px;
         }
 
-        .data-usage-item:last-child {
-            border-bottom: none;
+        .data-usage-table thead {
+            position: sticky;
+            top: 0;
+            background-color: #2a2a2a;
+            z-index: 1;
         }
 
-        .data-usage-date {
+        .data-usage-table th {
+            padding: 10px;
+            text-align: left;
+            font-weight: bold;
+            color: #007bff;
+            border-bottom: 2px solid #007bff;
+        }
+
+        .data-usage-table td {
+            padding: 10px;
+            border-bottom: 1px solid #3a3a3a;
             color: #ccc;
         }
 
-        .data-usage-size {
+        .data-usage-table tbody tr:hover {
+            background-color: #333;
+        }
+
+        .data-usage-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .data-usage-table .size-cell {
             color: #007bff;
             font-weight: bold;
+            text-align: right;
+        }
+
+        .data-usage-table .count-cell {
+            text-align: right;
+            color: #888;
         }
     </style>
 </head>
@@ -354,9 +381,20 @@
         <div class="menu-section">
             <h3>データ使用量</h3>
             <div class="data-usage">
-                <div class="data-usage-total" id="totalDataUsage">0 MB</div>
-                <div class="data-usage-daily" id="dailyDataUsage">
-                    <!-- 日別データがここに表示されます -->
+                <div class="data-usage-total" id="totalDataUsage">0 MB (0ファイル)</div>
+                <div class="data-usage-table-container">
+                    <table class="data-usage-table">
+                        <thead>
+                            <tr>
+                                <th>日付</th>
+                                <th class="size-cell">データ量(MB)</th>
+                                <th class="count-cell">ファイル数</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dailyDataUsage">
+                            <!-- 日別データがここに表示されます -->
+                        </tbody>
+                    </table>
                 </div>
             </div>
             <button id="exportUsageBtn" style="width: 100%; padding: 10px; background-color: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; margin-top: 10px;">usage.csv をエクスポート</button>
@@ -441,21 +479,34 @@
             const sortedDates = Object.keys(dataUsageByDate).sort().reverse();
             dailyElement.innerHTML = '';
 
-            sortedDates.forEach(date => {
-                const dayData = dataUsageByDate[date];
-                const sizeMB = (dayData.size / (1024 * 1024)).toFixed(2);
-                const item = document.createElement('div');
-                item.className = 'data-usage-item';
-                item.innerHTML = `
-                    <span class="data-usage-date">${date}</span>
-                    <span class="data-usage-size">${sizeMB} MB (${dayData.count})</span>
+            if (sortedDates.length === 0) {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td colspan="3" style="text-align: center; color: #888; padding: 20px;">
+                        データがありません
+                    </td>
                 `;
-                dailyElement.appendChild(item);
-            });
+                dailyElement.appendChild(row);
+            } else {
+                sortedDates.forEach(date => {
+                    const dayData = dataUsageByDate[date];
+                    const sizeMB = (dayData.size / (1024 * 1024)).toFixed(2);
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${date}</td>
+                        <td class="size-cell">${sizeMB}</td>
+                        <td class="count-cell">${dayData.count}</td>
+                    `;
+                    dailyElement.appendChild(row);
+                });
+            }
         }
 
-        // usage.csvを読み込む
+        // usage.csvを読み込む（LocalStorageに存在しない日付のみ追加）
         function loadUsageCSV() {
+            // まずLocalStorageから読み込む
+            loadDataUsage();
+
             fetch('usage.csv')
                 .then(response => {
                     if (!response.ok) throw new Error('usage.csvが見つかりません');
@@ -463,6 +514,8 @@
                 })
                 .then(text => {
                     const lines = text.trim().split('\n');
+                    let csvDataAdded = false;
+
                     // ヘッダー行をスキップ
                     for (let i = 1; i < lines.length; i++) {
                         const line = lines[i].trim();
@@ -477,25 +530,31 @@
                             // YYYY/MM/DD → YYYY-MM-DD に変換
                             const dateISO = date.replace(/\//g, '-');
 
+                            // LocalStorageに既に存在する日付はスキップ（LocalStorageを優先）
                             if (!dataUsageByDate[dateISO]) {
                                 dataUsageByDate[dateISO] = { size: 0, count: 0 };
+                                dataUsageByDate[dateISO].size = sizeMB * 1024 * 1024; // MBをバイトに変換
+                                dataUsageByDate[dateISO].count = count;
+                                totalDataUsage += sizeMB * 1024 * 1024;
+                                csvDataAdded = true;
                             }
-                            dataUsageByDate[dateISO].size = sizeMB * 1024 * 1024; // MBをバイトに変換
-                            dataUsageByDate[dateISO].count = count;
-                            totalDataUsage += sizeMB * 1024 * 1024;
                         }
                     }
-                    console.log('usage.csvを読み込みました');
 
-                    // LocalStorageに保存（usage.csvとLocalStorageを同期）
-                    localStorage.setItem('dataUsageByDate', JSON.stringify(dataUsageByDate));
-                    localStorage.setItem('totalDataUsage', totalDataUsage.toString());
+                    if (csvDataAdded) {
+                        console.log('usage.csvから新しいデータを追加しました');
+                        // LocalStorageに保存
+                        localStorage.setItem('dataUsageByDate', JSON.stringify(dataUsageByDate));
+                        localStorage.setItem('totalDataUsage', totalDataUsage.toString());
+                    } else {
+                        console.log('usage.csvのデータは既にLocalStorageに存在します');
+                    }
 
                     displayDataUsage();
                 })
                 .catch(err => {
-                    console.log('usage.csvが見つからないため、LocalStorageから復元します');
-                    loadDataUsage(); // usage.csvがない場合はLocalStorageから復元
+                    console.log('usage.csvが見つかりません。LocalStorageのデータを使用します。');
+                    displayDataUsage();
                 });
         }
 
@@ -618,30 +677,77 @@
                 video.playsInline = true;
                 video.playbackRate = parseFloat(document.getElementById('globalSpeed').value);
 
-                // Resource Timing APIを使用して動画のサイズを取得
+                // 動画のサイズを取得
                 let hasRecordedSize = false;
+                let estimatedSize = 0;
+
+                // progress イベントでダウンロード進捗を追跡
+                video.addEventListener('progress', () => {
+                    if (video.buffered.length > 0) {
+                        // ダウンロード済みの範囲を計算
+                        let bufferedEnd = video.buffered.end(video.buffered.length - 1);
+                        if (video.duration > 0) {
+                            // ダウンロード進捗から推定サイズを計算
+                            let progress = bufferedEnd / video.duration;
+                            console.log(`ダウンロード進捗: ${(progress * 100).toFixed(1)}%`);
+                        }
+                    }
+                });
+
+                video.addEventListener('loadedmetadata', () => {
+                    console.log(`動画メタデータ読み込み完了: ${convertedUrl}`);
+                    console.log(`動画時間: ${video.duration}秒`);
+                });
+
                 video.addEventListener('loadeddata', () => {
                     if (!hasRecordedSize) {
                         hasRecordedSize = true;
+                        console.log(`loadeddata イベント発火: ${convertedUrl}`);
+
                         setTimeout(() => {
                             try {
                                 const entries = performance.getEntriesByName(convertedUrl);
+                                console.log(`Performance entries 数: ${entries.length}`);
+
                                 if (entries.length > 0) {
                                     const entry = entries[entries.length - 1];
+                                    console.log('Performance entry:', {
+                                        transferSize: entry.transferSize,
+                                        encodedBodySize: entry.encodedBodySize,
+                                        decodedBodySize: entry.decodedBodySize
+                                    });
+
                                     // transferSizeは実際に転送されたバイト数（ヘッダー含む）
                                     if (entry.transferSize && entry.transferSize > 0) {
                                         updateDataUsage(entry.transferSize);
-                                        console.log(`動画サイズ記録: ${(entry.transferSize / (1024 * 1024)).toFixed(2)} MB`);
+                                        console.log(`✓ 動画サイズ記録: ${(entry.transferSize / (1024 * 1024)).toFixed(2)} MB`);
                                     } else if (entry.encodedBodySize && entry.encodedBodySize > 0) {
                                         // キャッシュから読み込んだ場合はencodedBodySizeを使用
                                         updateDataUsage(entry.encodedBodySize);
-                                        console.log(`動画サイズ記録(キャッシュ): ${(entry.encodedBodySize / (1024 * 1024)).toFixed(2)} MB`);
+                                        console.log(`✓ 動画サイズ記録(キャッシュ): ${(entry.encodedBodySize / (1024 * 1024)).toFixed(2)} MB`);
+                                    } else {
+                                        console.warn('⚠ transferSizeとencodedBodySizeが両方とも0です');
+                                        // フォールバック: ビットレートから推定
+                                        if (video.duration > 0) {
+                                            // 仮定: 平均ビットレート 2Mbps
+                                            estimatedSize = video.duration * 2 * 1024 * 1024 / 8;
+                                            updateDataUsage(estimatedSize);
+                                            console.log(`✓ 推定サイズで記録: ${(estimatedSize / (1024 * 1024)).toFixed(2)} MB (duration: ${video.duration}s)`);
+                                        }
+                                    }
+                                } else {
+                                    console.warn('⚠ Performance entriesが見つかりません');
+                                    // フォールバック: ビットレートから推定
+                                    if (video.duration > 0) {
+                                        estimatedSize = video.duration * 2 * 1024 * 1024 / 8;
+                                        updateDataUsage(estimatedSize);
+                                        console.log(`✓ 推定サイズで記録: ${(estimatedSize / (1024 * 1024)).toFixed(2)} MB (duration: ${video.duration}s)`);
                                     }
                                 }
                             } catch (err) {
-                                console.error('Resource Timing API エラー:', err);
+                                console.error('❌ Resource Timing API エラー:', err);
                             }
-                        }, 100);
+                        }, 500); // タイムアウトを500msに延長
                     }
                 });
 

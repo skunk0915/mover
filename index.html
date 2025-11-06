@@ -355,6 +355,47 @@
             text-align: right;
         }
 
+        /* データ使用量メーター */
+        .data-usage-meter {
+            margin-top: 15px;
+            padding: 10px 0;
+        }
+
+        .data-usage-meter-label {
+            font-size: 13px;
+            color: #ccc;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .data-usage-meter-bar {
+            width: 100%;
+            height: 24px;
+            background-color: #3a3a3a;
+            border-radius: 12px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .data-usage-meter-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #28a745 0%, #ffc107 50%, #dc3545 100%);
+            transition: width 0.3s ease;
+            border-radius: 12px;
+        }
+
+        .data-usage-meter-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 12px;
+            font-weight: bold;
+            color: #fff;
+            text-shadow: 0 0 3px rgba(0, 0, 0, 0.8);
+        }
+
         .data-usage-table .count-cell {
             text-align: right;
             color: #888;
@@ -464,6 +505,16 @@
             <h3>データ使用量</h3>
             <div class="data-usage">
                 <div class="data-usage-total" id="totalDataUsage">0 MB (0ファイル)</div>
+                <div class="data-usage-meter">
+                    <div class="data-usage-meter-label">
+                        <span>今日の使用量</span>
+                        <span id="todayUsageText">0 GB / 200 GB</span>
+                    </div>
+                    <div class="data-usage-meter-bar">
+                        <div class="data-usage-meter-fill" id="todayUsageMeter" style="width: 0%;"></div>
+                        <div class="data-usage-meter-text" id="todayUsagePercent">0%</div>
+                    </div>
+                </div>
                 <div class="data-usage-table-container">
                     <table class="data-usage-table">
                         <thead>
@@ -812,6 +863,17 @@
             const totalMB = (totalDataUsage / (1024 * 1024)).toFixed(2);
             const totalCount = Object.values(dataUsageByDate).reduce((sum, day) => sum + day.count, 0);
             totalElement.textContent = `合計: ${totalMB} MB (${totalCount}ファイル)`;
+
+            // 今日のデータ使用量をメーターに表示
+            const today = new Date().toISOString().split('T')[0];
+            const todayData = dataUsageByDate[today] || { size: 0, count: 0 };
+            const todayGB = todayData.size / (1024 * 1024 * 1024);
+            const maxGB = 200;
+            const percentage = Math.min((todayGB / maxGB) * 100, 100);
+
+            document.getElementById('todayUsageText').textContent = `${todayGB.toFixed(2)} GB / ${maxGB} GB`;
+            document.getElementById('todayUsageMeter').style.width = `${percentage}%`;
+            document.getElementById('todayUsagePercent').textContent = `${percentage.toFixed(1)}%`;
 
             // 日別データを表示（降順でソート）
             const sortedDates = Object.keys(dataUsageByDate).sort().reverse();

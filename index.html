@@ -412,14 +412,6 @@
             </div>
         </div>
 
-        <div class="menu-section">
-            <div class="control-group">
-                <label for="loadCount">追加で読み込む件数:</label>
-                <input type="number" id="loadCount" min="1" max="100" value="20" style="width: 100px; padding: 5px; background-color: #3a3a3a; border: 1px solid #4a4a4a; color: #fff; border-radius: 4px; margin-right: 10px; margin-top: 10px;">
-                <button id="loadMoreBtn" style="padding: 8px 20px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; margin-top: 10px;">追加で読み込む</button>
-                <div id="loadInfo" style="margin-top: 10px; color: #888;"></div>
-            </div>
-        </div>
     </div>
 
     <div class="video-grid" id="videoGrid"></div>
@@ -914,26 +906,10 @@
             });
 
             currentIndex = endIndex;
-            updateLoadInfo();
         }
 
-        // 読み込み情報を更新
-        function updateLoadInfo() {
-            const loadInfo = document.getElementById('loadInfo');
-            const remaining = allUrls.length - currentIndex;
-            loadInfo.textContent = `表示中: ${currentIndex}/${allUrls.length}件 (残り: ${remaining}件)`;
-
-            const loadMoreBtn = document.getElementById('loadMoreBtn');
-            if (remaining === 0) {
-                loadMoreBtn.disabled = true;
-                loadMoreBtn.style.backgroundColor = '#666';
-                loadMoreBtn.style.cursor = 'not-allowed';
-            } else {
-                loadMoreBtn.disabled = false;
-                loadMoreBtn.style.backgroundColor = '#007bff';
-                loadMoreBtn.style.cursor = 'pointer';
-            }
-        }
+        // 自動読み込みフラグ
+        let isLoadingMore = false;
 
         // タイルサイズ変更
         document.getElementById('tileSize').addEventListener('input', (e) => {
@@ -961,10 +937,20 @@
             });
         });
 
-        // 追加で読み込むボタンのイベントリスナー
-        document.getElementById('loadMoreBtn').addEventListener('click', () => {
-            const count = parseInt(document.getElementById('loadCount').value) || 20;
-            loadMoreVideos(count);
+        // スクロールイベントで自動読み込み
+        window.addEventListener('scroll', () => {
+            // ページ最下部に到達したかチェック
+            if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 100) {
+                // まだ読み込んでいないURLがあり、現在読み込み中でない場合
+                if (currentIndex < allUrls.length && !isLoadingMore) {
+                    isLoadingMore = true;
+                    loadMoreVideos(20);
+                    // 少し待ってからフラグをリセット
+                    setTimeout(() => {
+                        isLoadingMore = false;
+                    }, 1000);
+                }
+            }
         });
 
         // usage.csvエクスポートボタンのイベントリスナー

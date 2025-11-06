@@ -720,10 +720,49 @@
             }
         });
 
-        // データ使用量を更新
-        function updateDataUsage(videoSize, date) {
+        // サーバーからデータ使用量を取得
+        async function fetchDataUsageFromServer() {
+            try {
+                const response = await fetch('api/data-usage.php');
+                if (!response.ok) {
+                    throw new Error('Failed to fetch data usage from server');
+                }
+                const data = await response.json();
+
+                if (data.success) {
+                    dataUsageByDate = data.dataByDate;
+                    totalDataUsage = data.totalSize;
+                    displayDataUsage();
+                    console.log('✓ サーバーからデータ使用量を取得しました');
+                }
+            } catch (err) {
+                console.error('サーバーからデータ使用量を取得できませんでした:', err);
+                // フォールバック: LocalStorageから読み込む
+                loadDataUsageFromLocalStorage();
+            }
+        }
+
+        // LocalStorageからデータ使用量を読み込む（フォールバック用）
+        function loadDataUsageFromLocalStorage() {
+            const savedDailyData = localStorage.getItem('dataUsageByDate');
+            const savedTotal = localStorage.getItem('totalDataUsage');
+
+            if (savedDailyData) {
+                dataUsageByDate = JSON.parse(savedDailyData);
+            }
+            if (savedTotal) {
+                totalDataUsage = parseFloat(savedTotal);
+            }
+
+            displayDataUsage();
+            console.log('LocalStorageからデータ使用量を読み込みました');
+        }
+
+        // データ使用量を更新（サーバーに送信）
+        async function updateDataUsage(videoSize, date) {
             const dateStr = date || new Date().toISOString().split('T')[0];
 
+            // ローカルで即座に更新
             if (!dataUsageByDate[dateStr]) {
                 dataUsageByDate[dateStr] = { size: 0, count: 0 };
             }
@@ -731,11 +770,37 @@
             dataUsageByDate[dateStr].count += 1;
             totalDataUsage += videoSize;
 
-            // LocalStorageに保存
-            localStorage.setItem('dataUsageByDate', JSON.stringify(dataUsageByDate));
-            localStorage.setItem('totalDataUsage', totalDataUsage.toString());
-
             displayDataUsage();
+
+            // サーバーに送信（非同期）
+            try {
+                const response = await fetch('api/data-usage.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        date: dateStr,
+                        sizeBytes: videoSize,
+                        fileCount: 1
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to save data usage to server');
+                }
+
+                const result = await response.json();
+                if (result.success) {
+                    console.log('✓ サーバーにデータ使用量を保存しました');
+                }
+            } catch (err) {
+                console.error('サーバーへのデータ保存に失敗しました:', err);
+                // フォールバック: LocalStorageに保存
+                localStorage.setItem('dataUsageByDate', JSON.stringify(dataUsageByDate));
+                localStorage.setItem('totalDataUsage', totalDataUsage.toString());
+                console.log('LocalStorageに保存しました');
+            }
         }
 
         // データ使用量を表示
@@ -775,76 +840,8 @@
             }
         }
 
-        // usage.csvを読み込む（LocalStorageに存在しない日付のみ追加）
-        function loadUsageCSV() {
-            // まずLocalStorageから読み込む
-            loadDataUsage();
-
-            fetch('usage.csv')
-                .then(response => {
-                    if (!response.ok) throw new Error('usage.csvが見つかりません');
-                    return response.text();
-                })
-                .then(text => {
-                    const lines = text.trim().split('\n');
-                    let csvDataAdded = false;
-
-                    // ヘッダー行をスキップ
-                    for (let i = 1; i < lines.length; i++) {
-                        const line = lines[i].trim();
-                        if (!line) continue;
-
-                        const parts = line.split(',');
-                        if (parts.length >= 3) {
-                            const date = parts[0].trim(); // YYYY/MM/DD形式
-                            const sizeMB = parseFloat(parts[1].trim());
-                            const count = parseInt(parts[2].trim());
-
-                            // YYYY/MM/DD → YYYY-MM-DD に変換
-                            const dateISO = date.replace(/\//g, '-');
-
-                            // LocalStorageに既に存在する日付はスキップ（LocalStorageを優先）
-                            if (!dataUsageByDate[dateISO]) {
-                                dataUsageByDate[dateISO] = { size: 0, count: 0 };
-                                dataUsageByDate[dateISO].size = sizeMB * 1024 * 1024; // MBをバイトに変換
-                                dataUsageByDate[dateISO].count = count;
-                                totalDataUsage += sizeMB * 1024 * 1024;
-                                csvDataAdded = true;
-                            }
-                        }
-                    }
-
-                    if (csvDataAdded) {
-                        console.log('usage.csvから新しいデータを追加しました');
-                        // LocalStorageに保存
-                        localStorage.setItem('dataUsageByDate', JSON.stringify(dataUsageByDate));
-                        localStorage.setItem('totalDataUsage', totalDataUsage.toString());
-                    } else {
-                        console.log('usage.csvのデータは既にLocalStorageに存在します');
-                    }
-
-                    displayDataUsage();
-                })
-                .catch(err => {
-                    console.log('usage.csvが見つかりません。LocalStorageのデータを使用します。');
-                    displayDataUsage();
-                });
-        }
-
-        // LocalStorageからデータを復元
-        function loadDataUsage() {
-            const savedDailyData = localStorage.getItem('dataUsageByDate');
-            const savedTotal = localStorage.getItem('totalDataUsage');
-
-            if (savedDailyData) {
-                dataUsageByDate = JSON.parse(savedDailyData);
-            }
-            if (savedTotal) {
-                totalDataUsage = parseFloat(savedTotal);
-            }
-
-            displayDataUsage();
-        }
+        // 使用しない関数（サーバー側で管理するため削除）
+        // usage.csvからの読み込みは不要になりました
 
         // usage.csv形式でエクスポート
         function exportUsageCSV() {
@@ -1252,17 +1249,14 @@
             exportUsageCSV();
         });
 
-        // ページ読み込み時にCSVデータを読み込み
-        window.addEventListener('load', () => {
+        // ページ読み込み時にデータを読み込み
+        window.addEventListener('load', async () => {
             // URLフィルタを読み込む
             loadFilters();
             loadAllowKeywords();
 
-            // usage.csvを読み込む（優先）
-            loadUsageCSV();
-
-            // LocalStorageからデータ使用量を復元（usage.csvが無い場合のフォールバック）
-            // loadDataUsage(); // usage.csvを優先するためコメントアウト
+            // サーバーからデータ使用量を読み込む
+            await fetchDataUsageFromServer();
 
             // urls.csvを読み込む
             fetch('urls.csv')

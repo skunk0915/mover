@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>データ移行ツール</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #1a1a1a;
+            color: #ffffff;
+            padding: 40px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: #007bff;
+            margin-bottom: 30px;
+        }
+
+        .section {
+            background-color: #2a2a2a;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+        }
+
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        button:disabled {
+            background-color: #555;
+            cursor: not-allowed;
+        }
+
+        #log {
+            background-color: #1a1a1a;
+            padding: 15px;
+            border-radius: 4px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            margin-top: 20px;
+        }
+
+        .log-success {
+            color: #28a745;
+        }
+
+        .log-error {
+            color: #dc3545;
+        }
+
+        .log-info {
+            color: #17a2b8;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .stat-card {
+            background-color: #1a1a1a;
+            padding: 15px;
+            border-radius: 4px;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #007bff;
+        }
+
+        .stat-label {
+            font-size: 14px;
+            color: #888;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>LocalStorageからサーバーへのデータ移行ツール</h1>
+
+    <div class="section">
+        <h2>現在のLocalStorageデータ</h2>
+        <div class="stats" id="stats">
+            <div class="stat-card">
+                <div class="stat-value" id="localTotalSize">-</div>
+                <div class="stat-label">合計データ量 (MB)</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="localTotalDays">-</div>
+                <div class="stat-label">記録日数</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="localTotalFiles">-</div>
+                <div class="stat-label">合計ファイル数</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>移行操作</h2>
+        <button id="checkBtn">LocalStorageデータを確認</button>
+        <button id="migrateBtn" disabled>サーバーに移行</button>
+        <button id="clearBtn" disabled style="background-color: #dc3545;">LocalStorageをクリア</button>
+    </div>
+
+    <div class="section">
+        <h2>ログ</h2>
+        <div id="log"></div>
+    </div>
+
+    <script>
+        let localDataUsageByDate = {};
+        let localTotalDataUsage = 0;
+
+        const logElement = document.getElementById('log');
+
+        function log(message, type = 'info') {
+            const className = type === 'error' ? 'log-error' : type === 'success' ? 'log-success' : 'log-info';
+            const timestamp = new Date().toLocaleTimeString('ja-JP');
+            logElement.innerHTML += `<div class="${className}">[${timestamp}] ${message}</div>`;
+            logElement.scrollTop = logElement.scrollHeight;
+        }
+
+        function checkLocalStorage() {
+            log('LocalStorageデータを確認しています...', 'info');
+
+            const savedDailyData = localStorage.getItem('dataUsageByDate');
+            const savedTotal = localStorage.getItem('totalDataUsage');
+
+            if (!savedDailyData || !savedTotal) {
+                log('LocalStorageにデータが見つかりません', 'error');
+                return false;
+            }
+
+            localDataUsageByDate = JSON.parse(savedDailyData);
+            localTotalDataUsage = parseFloat(savedTotal);
+
+            const totalDays = Object.keys(localDataUsageByDate).length;
+            const totalFiles = Object.values(localDataUsageByDate).reduce((sum, day) => sum + day.count, 0);
+            const totalMB = (localTotalDataUsage / (1024 * 1024)).toFixed(2);
+
+            document.getElementById('localTotalSize').textContent = totalMB;
+            document.getElementById('localTotalDays').textContent = totalDays;
+            document.getElementById('localTotalFiles').textContent = totalFiles;
+
+            log(`✓ LocalStorageデータを確認しました: ${totalDays}日分、合計${totalMB}MB、${totalFiles}ファイル`, 'success');
+
+            // 移行ボタンを有効化
+            document.getElementById('migrateBtn').disabled = false;
+
+            return true;
+        }
+
+        async function migrateToServer() {
+            log('サーバーへの移行を開始します...', 'info');
+
+            document.getElementById('migrateBtn').disabled = true;
+
+            let successCount = 0;
+            let errorCount = 0;
+
+            for (const [date, data] of Object.entries(localDataUsageByDate)) {
+                try {
+                    const response = await fetch('api/data-usage.php', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            date: date,
+                            sizeBytes: data.size,
+                            fileCount: data.count
+                        })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    const result = await response.json();
+
+                    if (result.success) {
+                        successCount++;
+                        const sizeMB = (data.size / (1024 * 1024)).toFixed(2);
+                        log(`✓ ${date}: ${sizeMB}MB (${data.count}ファイル) を移行しました`, 'success');
+                    } else {
+                        throw new Error(result.error || 'Unknown error');
+                    }
+                } catch (err) {
+                    errorCount++;
+                    log(`✗ ${date} の移行に失敗: ${err.message}`, 'error');
+                }
+
+                // 少し待つ（サーバー負荷軽減）
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+
+            if (errorCount === 0) {
+                log(`\n✓ 移行完了！ ${successCount}日分のデータをサーバーに移行しました`, 'success');
+                log('LocalStorageをクリアできます', 'info');
+                document.getElementById('clearBtn').disabled = false;
+            } else {
+                log(`\n⚠ 移行完了（一部エラーあり）: 成功=${successCount}、失敗=${errorCount}`, 'error');
+            }
+        }
+
+        function clearLocalStorage() {
+            if (!confirm('LocalStorageのデータを削除します。よろしいですか？\n\n※サーバーへの移行が完了していることを確認してください。')) {
+                return;
+            }
+
+            localStorage.removeItem('dataUsageByDate');
+            localStorage.removeItem('totalDataUsage');
+
+            log('✓ LocalStorageをクリアしました', 'success');
+
+            document.getElementById('localTotalSize').textContent = '0';
+            document.getElementById('localTotalDays').textContent = '0';
+            document.getElementById('localTotalFiles').textContent = '0';
+
+            document.getElementById('migrateBtn').disabled = true;
+            document.getElementById('clearBtn').disabled = true;
+        }
+
+        // イベントリスナー
+        document.getElementById('checkBtn').addEventListener('click', checkLocalStorage);
+        document.getElementById('migrateBtn').addEventListener('click', migrateToServer);
+        document.getElementById('clearBtn').addEventListener('click', clearLocalStorage);
+
+        // ページ読み込み時に自動チェック
+        window.addEventListener('load', () => {
+            checkLocalStorage();
+        });
+    </script>
+</body>
+</html>

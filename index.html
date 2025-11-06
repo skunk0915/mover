@@ -186,40 +186,357 @@
             font-size: 18px;
             color: #888;
         }
+
+        /* ハンバーガーメニューボタン */
+        .menu-button {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 50px;
+            height: 50px;
+            background-color: #007bff;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            z-index: 1001;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 6px;
+            transition: background-color 0.3s;
+        }
+
+        .menu-button:hover {
+            background-color: #0056b3;
+        }
+
+        .menu-button span {
+            display: block;
+            width: 25px;
+            height: 3px;
+            background-color: white;
+            border-radius: 2px;
+            transition: all 0.3s;
+        }
+
+        .menu-button.active span:nth-child(1) {
+            transform: translateY(9px) rotate(45deg);
+        }
+
+        .menu-button.active span:nth-child(2) {
+            opacity: 0;
+        }
+
+        .menu-button.active span:nth-child(3) {
+            transform: translateY(-9px) rotate(-45deg);
+        }
+
+        /* オーバーレイメニュー */
+        .overlay-menu {
+            position: fixed;
+            top: 0;
+            right: -100%;
+            width: 400px;
+            max-width: 90vw;
+            height: 100vh;
+            background-color: #2a2a2a;
+            box-shadow: -2px 0 10px rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            transition: right 0.3s ease-in-out;
+            overflow-y: auto;
+            padding: 80px 20px 20px 20px;
+        }
+
+        .overlay-menu.active {
+            right: 0;
+        }
+
+        .overlay-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            z-index: 999;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+
+        .overlay-backdrop.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .menu-section {
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #4a4a4a;
+        }
+
+        .menu-section:last-child {
+            border-bottom: none;
+        }
+
+        .menu-section h2 {
+            font-size: 18px;
+            margin-bottom: 15px;
+            color: #007bff;
+        }
+
+        .menu-section h3 {
+            font-size: 14px;
+            margin-bottom: 10px;
+            color: #ccc;
+        }
+
+        /* データ使用量表示 */
+        .data-usage {
+            background-color: #1a1a1a;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+        }
+
+        .data-usage-total {
+            font-size: 24px;
+            font-weight: bold;
+            color: #007bff;
+            margin-bottom: 10px;
+        }
+
+        .data-usage-daily {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .data-usage-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #3a3a3a;
+            font-size: 13px;
+        }
+
+        .data-usage-item:last-child {
+            border-bottom: none;
+        }
+
+        .data-usage-date {
+            color: #ccc;
+        }
+
+        .data-usage-size {
+            color: #007bff;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
-    <div class="controls">
-        <h1 style="margin-bottom: 20px;">Dropbox Video Viewer</h1>
+    <!-- ハンバーガーメニューボタン -->
+    <button class="menu-button" id="menuButton">
+        <span></span>
+        <span></span>
+        <span></span>
+    </button>
 
-        <div class="control-group">
-            <label for="tileSize">タイルサイズ: <span class="slider-value" id="tileSizeValue">300px</span></label>
-            <input type="range" id="tileSize" min="100" max="800" value="300" step="10" />
+    <!-- オーバーレイ背景 -->
+    <div class="overlay-backdrop" id="overlayBackdrop"></div>
+
+    <!-- オーバーレイメニュー -->
+    <div class="overlay-menu" id="overlayMenu">
+        <div class="menu-section">
+            <h2>Dropbox Video Viewer</h2>
         </div>
 
-        <div class="control-group">
-            <label for="globalSpeed">全体再生速度: <span class="slider-value" id="globalSpeedValue">1.0x</span></label>
-            <input type="range" id="globalSpeed" min="0.1" max="3.0" value="1.0" step="0.1" />
+        <div class="menu-section">
+            <h3>データ使用量</h3>
+            <div class="data-usage">
+                <div class="data-usage-total" id="totalDataUsage">0 MB</div>
+                <div class="data-usage-daily" id="dailyDataUsage">
+                    <!-- 日別データがここに表示されます -->
+                </div>
+            </div>
+            <button id="exportUsageBtn" style="width: 100%; padding: 10px; background-color: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; margin-top: 10px;">usage.csv をエクスポート</button>
+        </div>
+
+        <div class="menu-section">
+            <div class="control-group">
+                <label for="tileSize">タイルサイズ: <span class="slider-value" id="tileSizeValue">300px</span></label>
+                <input type="range" id="tileSize" min="100" max="800" value="300" step="10" />
+            </div>
+
+            <div class="control-group">
+                <label for="globalSpeed">全体再生速度: <span class="slider-value" id="globalSpeedValue">1.0x</span></label>
+                <input type="range" id="globalSpeed" min="0.1" max="3.0" value="1.0" step="0.1" />
+            </div>
+        </div>
+
+        <div class="menu-section">
+            <div class="control-group">
+                <label for="loadCount">追加で読み込む件数:</label>
+                <input type="number" id="loadCount" min="1" max="100" value="20" style="width: 100px; padding: 5px; background-color: #3a3a3a; border: 1px solid #4a4a4a; color: #fff; border-radius: 4px; margin-right: 10px; margin-top: 10px;">
+                <button id="loadMoreBtn" style="padding: 8px 20px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; margin-top: 10px;">追加で読み込む</button>
+                <div id="loadInfo" style="margin-top: 10px; color: #888;"></div>
+            </div>
         </div>
     </div>
 
     <div class="video-grid" id="videoGrid"></div>
     <div class="status" id="status">urls.csv を読み込んでいます...</div>
 
-    <div class="controls" style="margin-top: 20px;">
-        <div class="control-group">
-            <label for="loadCount">追加で読み込む件数:</label>
-            <input type="number" id="loadCount" min="1" max="100" value="20" style="width: 100px; padding: 5px; background-color: #3a3a3a; border: 1px solid #4a4a4a; color: #fff; border-radius: 4px; margin-right: 10px;">
-            <button id="loadMoreBtn" style="padding: 8px 20px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">追加で読み込む</button>
-            <span id="loadInfo" style="margin-left: 15px; color: #888;"></span>
-        </div>
-    </div>
-
     <script>
         // グローバル変数
         let allUrls = [];
         let currentIndex = 0;
         const defaultLoadCount = 20;
+        let dataUsageByDate = {}; // 日別データ使用量を記録 { '2025-11-06': { size: 0, count: 0 } }
+        let totalDataUsage = 0; // 総データ使用量
+
+        // ハンバーガーメニューの開閉
+        const menuButton = document.getElementById('menuButton');
+        const overlayMenu = document.getElementById('overlayMenu');
+        const overlayBackdrop = document.getElementById('overlayBackdrop');
+
+        function toggleMenu() {
+            menuButton.classList.toggle('active');
+            overlayMenu.classList.toggle('active');
+            overlayBackdrop.classList.toggle('active');
+        }
+
+        menuButton.addEventListener('click', toggleMenu);
+        overlayBackdrop.addEventListener('click', toggleMenu);
+
+        // データ使用量を更新
+        function updateDataUsage(videoSize, date) {
+            const dateStr = date || new Date().toISOString().split('T')[0];
+
+            if (!dataUsageByDate[dateStr]) {
+                dataUsageByDate[dateStr] = { size: 0, count: 0 };
+            }
+            dataUsageByDate[dateStr].size += videoSize;
+            dataUsageByDate[dateStr].count += 1;
+            totalDataUsage += videoSize;
+
+            // LocalStorageに保存
+            localStorage.setItem('dataUsageByDate', JSON.stringify(dataUsageByDate));
+            localStorage.setItem('totalDataUsage', totalDataUsage.toString());
+
+            displayDataUsage();
+        }
+
+        // データ使用量を表示
+        function displayDataUsage() {
+            const totalElement = document.getElementById('totalDataUsage');
+            const dailyElement = document.getElementById('dailyDataUsage');
+
+            // 合計を表示
+            const totalMB = (totalDataUsage / (1024 * 1024)).toFixed(2);
+            const totalCount = Object.values(dataUsageByDate).reduce((sum, day) => sum + day.count, 0);
+            totalElement.textContent = `合計: ${totalMB} MB (${totalCount}ファイル)`;
+
+            // 日別データを表示（降順でソート）
+            const sortedDates = Object.keys(dataUsageByDate).sort().reverse();
+            dailyElement.innerHTML = '';
+
+            sortedDates.forEach(date => {
+                const dayData = dataUsageByDate[date];
+                const sizeMB = (dayData.size / (1024 * 1024)).toFixed(2);
+                const item = document.createElement('div');
+                item.className = 'data-usage-item';
+                item.innerHTML = `
+                    <span class="data-usage-date">${date}</span>
+                    <span class="data-usage-size">${sizeMB} MB (${dayData.count})</span>
+                `;
+                dailyElement.appendChild(item);
+            });
+        }
+
+        // usage.csvを読み込む
+        function loadUsageCSV() {
+            fetch('usage.csv')
+                .then(response => {
+                    if (!response.ok) throw new Error('usage.csvが見つかりません');
+                    return response.text();
+                })
+                .then(text => {
+                    const lines = text.trim().split('\n');
+                    // ヘッダー行をスキップ
+                    for (let i = 1; i < lines.length; i++) {
+                        const line = lines[i].trim();
+                        if (!line) continue;
+
+                        const parts = line.split(',');
+                        if (parts.length >= 3) {
+                            const date = parts[0].trim(); // YYYY/MM/DD形式
+                            const sizeMB = parseFloat(parts[1].trim());
+                            const count = parseInt(parts[2].trim());
+
+                            // YYYY/MM/DD → YYYY-MM-DD に変換
+                            const dateISO = date.replace(/\//g, '-');
+
+                            if (!dataUsageByDate[dateISO]) {
+                                dataUsageByDate[dateISO] = { size: 0, count: 0 };
+                            }
+                            dataUsageByDate[dateISO].size = sizeMB * 1024 * 1024; // MBをバイトに変換
+                            dataUsageByDate[dateISO].count = count;
+                            totalDataUsage += sizeMB * 1024 * 1024;
+                        }
+                    }
+                    console.log('usage.csvを読み込みました');
+
+                    // LocalStorageに保存（usage.csvとLocalStorageを同期）
+                    localStorage.setItem('dataUsageByDate', JSON.stringify(dataUsageByDate));
+                    localStorage.setItem('totalDataUsage', totalDataUsage.toString());
+
+                    displayDataUsage();
+                })
+                .catch(err => {
+                    console.log('usage.csvが見つからないため、LocalStorageから復元します');
+                    loadDataUsage(); // usage.csvがない場合はLocalStorageから復元
+                });
+        }
+
+        // LocalStorageからデータを復元
+        function loadDataUsage() {
+            const savedDailyData = localStorage.getItem('dataUsageByDate');
+            const savedTotal = localStorage.getItem('totalDataUsage');
+
+            if (savedDailyData) {
+                dataUsageByDate = JSON.parse(savedDailyData);
+            }
+            if (savedTotal) {
+                totalDataUsage = parseFloat(savedTotal);
+            }
+
+            displayDataUsage();
+        }
+
+        // usage.csv形式でエクスポート
+        function exportUsageCSV() {
+            let csvContent = '年月日,データ量（MB）,ファイル数\n';
+
+            const sortedDates = Object.keys(dataUsageByDate).sort();
+            sortedDates.forEach(date => {
+                const dayData = dataUsageByDate[date];
+                const dateFormatted = date.replace(/-/g, '/'); // YYYY-MM-DD → YYYY/MM/DD
+                const sizeMB = (dayData.size / (1024 * 1024)).toFixed(0);
+                csvContent += `${dateFormatted},${sizeMB},${dayData.count}\n`;
+            });
+
+            // CSVをダウンロード
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            link.setAttribute('download', 'usage.csv');
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
 
         // Dropbox URL変換関数
         function convertDropboxUrl(url) {
@@ -300,6 +617,33 @@
                 video.muted = true;
                 video.playsInline = true;
                 video.playbackRate = parseFloat(document.getElementById('globalSpeed').value);
+
+                // Resource Timing APIを使用して動画のサイズを取得
+                let hasRecordedSize = false;
+                video.addEventListener('loadeddata', () => {
+                    if (!hasRecordedSize) {
+                        hasRecordedSize = true;
+                        setTimeout(() => {
+                            try {
+                                const entries = performance.getEntriesByName(convertedUrl);
+                                if (entries.length > 0) {
+                                    const entry = entries[entries.length - 1];
+                                    // transferSizeは実際に転送されたバイト数（ヘッダー含む）
+                                    if (entry.transferSize && entry.transferSize > 0) {
+                                        updateDataUsage(entry.transferSize);
+                                        console.log(`動画サイズ記録: ${(entry.transferSize / (1024 * 1024)).toFixed(2)} MB`);
+                                    } else if (entry.encodedBodySize && entry.encodedBodySize > 0) {
+                                        // キャッシュから読み込んだ場合はencodedBodySizeを使用
+                                        updateDataUsage(entry.encodedBodySize);
+                                        console.log(`動画サイズ記録(キャッシュ): ${(entry.encodedBodySize / (1024 * 1024)).toFixed(2)} MB`);
+                                    }
+                                }
+                            } catch (err) {
+                                console.error('Resource Timing API エラー:', err);
+                            }
+                        }, 100);
+                    }
+                });
 
                 // 動画クリックで再生/一時停止をトグル
                 video.addEventListener('click', (e) => {
@@ -517,8 +861,19 @@
             loadMoreVideos(count);
         });
 
+        // usage.csvエクスポートボタンのイベントリスナー
+        document.getElementById('exportUsageBtn').addEventListener('click', () => {
+            exportUsageCSV();
+        });
+
         // ページ読み込み時にCSVデータを読み込み
         window.addEventListener('load', () => {
+            // usage.csvを読み込む（優先）
+            loadUsageCSV();
+
+            // LocalStorageからデータ使用量を復元（usage.csvが無い場合のフォールバック）
+            // loadDataUsage(); // usage.csvを優先するためコメントアウト
+
             // urls.csvを読み込む
             fetch('urls.csv')
                 .then(response => {

@@ -15,7 +15,7 @@
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background-color: #1a1a1a;
             color: #ffffff;
-            padding: 20px;
+            padding: 0;
         }
 
         .controls {
@@ -543,6 +543,13 @@
                 <label for="globalSpeed">全体再生速度: <span class="slider-value" id="globalSpeedValue">1.0x</span></label>
                 <input type="range" id="globalSpeed" min="0.1" max="3.0" value="1.0" step="0.1" />
             </div>
+
+            <div class="control-group">
+                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                    <input type="checkbox" id="globalLoop" checked style="width: auto; height: auto; cursor: pointer;" />
+                    <span>全動画リピート</span>
+                </label>
+            </div>
         </div>
 
         <div class="menu-section">
@@ -581,6 +588,7 @@
         let totalDataUsage = 0; // 総データ使用量
         let filterKeywords = []; // URL除外キーワード
         let allowKeywords = []; // URL許可キーワード
+        let globalLoopEnabled = true; // 全動画のリピート設定
 
         // ハンバーガーメニューの開閉
         const menuButton = document.getElementById('menuButton');
@@ -1019,7 +1027,7 @@
                 const video = document.createElement('video');
                 video.src = convertedUrl;
                 video.autoplay = true;
-                video.loop = true;
+                video.loop = globalLoopEnabled;
                 video.muted = true;
                 video.playsInline = true;
                 video.playbackRate = parseFloat(document.getElementById('globalSpeed').value);
@@ -1287,6 +1295,18 @@
             sliders.forEach(slider => {
                 slider.value = speed;
                 slider.nextElementSibling.textContent = speed.toFixed(1) + 'x';
+            });
+        });
+
+        // 全動画リピートON/OFF切り替え
+        document.getElementById('globalLoop').addEventListener('change', (e) => {
+            globalLoopEnabled = e.target.checked;
+            console.log('全動画リピート:', globalLoopEnabled ? 'ON' : 'OFF');
+
+            // すべての既存動画のloop属性を更新
+            const videos = document.querySelectorAll('.video-item video');
+            videos.forEach(video => {
+                video.loop = globalLoopEnabled;
             });
         });
 

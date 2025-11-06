@@ -1,7 +1,13 @@
 /* -----------------------------------------------------------
    Dropbox 「フォルダ内の全ファイル → 共有リンク → raw URL」取得
    ・node-fetch v3 / ESModules
-   ・.env に DBX_TOKEN=sl.xxxxxx を設定
+   ・リフレッシュトークン対応（長期間有効なトークン）
+   ・.env に以下を設定:
+     - DROPBOX_REFRESH_TOKEN (推奨)
+     - DROPBOX_APP_KEY
+     - DROPBOX_APP_SECRET
+     または
+     - DBX_TOKEN (従来の短期トークン、4時間で期限切れ)
    ----------------------------------------------------------- */
 
 import 'dotenv/config';
@@ -9,22 +15,73 @@ import fetch from 'node-fetch';
 import { writeFileSync, appendFileSync, readFileSync, existsSync } from 'node:fs';
 
 //------------------------------------------------------------
-// 0. 引数・トークン確認
+// 0. リフレッシュトークンを使ってアクセストークンを取得
 //------------------------------------------------------------
-const token  = process.env.DBX_TOKEN;
+async function getAccessToken() {
+  const refreshToken = process.env.DROPBOX_REFRESH_TOKEN;
+  const appKey = process.env.DROPBOX_APP_KEY;
+  const appSecret = process.env.DROPBOX_APP_SECRET;
+
+  if (!refreshToken || !appKey || !appSecret) {
+    // リフレッシュトークンが設定されていない場合、従来のDBX_TOKENを使用
+    const legacyToken = process.env.DBX_TOKEN;
+    if (legacyToken) {
+      console.log('⚠️  従来の短期トークン（DBX_TOKEN）を使用しています');
+      console.log('⚠️  リフレッシュトークンへの移行を推奨します（README参照）');
+      return legacyToken;
+    }
+
+    console.error('❌  環境変数が設定されていません');
+    console.error('   以下のいずれかを設定してください:');
+    console.error('   1) DROPBOX_REFRESH_TOKEN, DROPBOX_APP_KEY, DROPBOX_APP_SECRET (推奨)');
+    console.error('   2) DBX_TOKEN (4時間で期限切れ)');
+    process.exit(1);
+  }
+
+  // リフレッシュトークンを使ってアクセストークンを取得
+  const params = new URLSearchParams({
+    grant_type: 'refresh_token',
+    refresh_token: refreshToken,
+    client_id: appKey,
+    client_secret: appSecret
+  });
+
+  try {
+    const res = await fetch('https://api.dropbox.com/oauth2/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString()
+    });
+
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(`トークン取得失敗 (${res.status}): ${errorText}`);
+    }
+
+    const data = await res.json();
+    console.log('✅ リフレッシュトークンからアクセストークンを取得しました');
+    console.log(`⏰ 有効期限: ${data.expires_in}秒 (約${Math.floor(data.expires_in / 3600)}時間)`);
+    return data.access_token;
+  } catch (error) {
+    console.error('❌ アクセストークン取得エラー:', error.message);
+    process.exit(1);
+  }
+}
+
+//------------------------------------------------------------
+// 1. 引数・トークン確認
+//------------------------------------------------------------
 const arg    = process.argv[2] || '/';             // CLI 引数（例: "/Movies/2023"）
 const folder = arg.startsWith('/') ? arg : `/${arg}`;
 
-if (!token) {
-  console.error('❌  環境変数 DBX_TOKEN が設定されていません (.env か set コマンドで定義)');
-  process.exit(1);
-}
-
 console.log('📁 対象フォルダ:', folder);
+
+// アクセストークンを取得
+const token = await getAccessToken();
 console.log('🔑 Token head   :', token.slice(0, 15), '...');
 
 //------------------------------------------------------------
-// 1. API 呼び出しヘルパ
+// 2. API 呼び出しヘルパ
 //------------------------------------------------------------
 const headers = {
   Authorization: `Bearer ${token}`,
@@ -45,7 +102,7 @@ async function api(endpoint, body) {
 }
 
 //------------------------------------------------------------
-// 2. 指定フォルダ内のファイル一覧を取得（非再帰）
+// 3. 指定フォルダ内のファイル一覧を取得（非再帰）
 //------------------------------------------------------------
 console.log('\n--- フォルダ一覧取得 --------------------------------');
 let { entries, cursor, has_more } =
@@ -67,7 +124,7 @@ if (!files.length) {
 }
 
 //------------------------------------------------------------
-// 3. 各ファイルの共有リンク取得／新規生成
+// 4. 各ファイルの共有リンク取得／新規生成
 //------------------------------------------------------------
 console.log('\n--- 共有リンク取得／生成 ------------------------------');
 
@@ -121,7 +178,7 @@ for (const f of files) {
 }
 
 //------------------------------------------------------------
-// 4. 出力
+// 5. 出力
 //------------------------------------------------------------
 console.log('\n--- 取得結果 ----------------------------------------');
 console.table(table);
@@ -130,7 +187,7 @@ writeFileSync('dropbox_raw_links.json', JSON.stringify(table, null, 2));
 console.log(`💾 dropbox_raw_links.json に ${table.length} 件を書き出しました`);
 
 //------------------------------------------------------------
-// 5. urls_tmp.csvの重複削除
+// 6. urls_tmp.csvの重複削除
 //------------------------------------------------------------
 console.log('\n--- urls_tmp.csvの重複削除 ----------------------------');
 if (existsSync(urlsCsvPath)) {

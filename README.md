@@ -20,11 +20,68 @@ mover/
 
 ### 1. Dropboxトークンの設定
 
-`get_share_url/.env` ファイルに Dropbox トークンを設定：
+#### 推奨: リフレッシュトークン方式（長期間有効）
+
+`get_share_url/.env` ファイルに以下を設定：
+
+```env
+DROPBOX_APP_KEY=your_app_key_here
+DROPBOX_APP_SECRET=your_app_secret_here
+DROPBOX_REFRESH_TOKEN=your_refresh_token_here
+```
+
+**リフレッシュトークンの取得方法:**
+
+#### ステップ1: Dropboxアプリの作成
+
+1. [Dropbox App Console](https://www.dropbox.com/developers/apps) にアクセス
+2. 「Create app」をクリック
+3. 以下を選択：
+   - Choose an API: **Scoped access**
+   - Choose the type of access: **Full Dropbox** または **App folder**（用途に応じて）
+   - Name your app: 任意のアプリ名を入力
+4. アプリを作成
+
+#### ステップ2: アプリの設定
+
+1. **Settings** タブで以下を確認：
+   - **App key** をコピーして、`get_share_url/.env` に以下を追加：
+     ```env
+     DROPBOX_APP_KEY=your_app_key_here
+     DROPBOX_APP_SECRET=your_app_secret_here
+     ```
+   - **Redirect URIs** に `http://localhost:8080/callback` を追加して「Add」をクリック
+
+2. **Permissions** タブで以下の権限を有効化：
+   - `files.content.read`
+   - `sharing.write`
+   - `sharing.read`
+   - 設定後「Submit」をクリック
+
+#### ステップ3: リフレッシュトークンの取得
+
+1. ターミナルで以下を実行：
+   ```bash
+   cd get_share_url
+   node get-refresh-token.js
+   ```
+
+2. ブラウザで表示されたURLを開き、Dropboxにログインしてアクセスを許可
+
+3. リフレッシュトークンが表示されるので、`get_share_url/.env` に追加：
+   ```env
+   DROPBOX_REFRESH_TOKEN=your_refresh_token_here
+   ```
+
+**注意:** App Console の「Generate」ボタンで表示されるトークンは短期トークン（sl.で始まる）です。リフレッシュトークン取得には上記のスクリプトを使用してください。
+
+#### 従来方式: 短期トークン（4時間で期限切れ、非推奨）
 
 ```env
 DBX_TOKEN=sl.xxxxxxxxxxxxxxxxxxxxxxxxx
 ```
+
+**注意:** 短期トークンは4時間で無効になります。リフレッシュトークンへの移行を推奨します。
 
 ### 2. 必要なパッケージのインストール
 
@@ -125,11 +182,23 @@ Remove-Item get_share_url\urls_tmp.csv
 Copy-Item get_share_url\urls_tmp.csv urls.csv
 ```
 
-### エラー: `環境変数 DBX_TOKEN が設定されていません`
+### エラー: `環境変数が設定されていません`
 
 **原因:** .env ファイルにトークンが設定されていない
 
-**解決策:** `get_share_url/.env` を作成し、`DBX_TOKEN=sl.xxxxx` を追加
+**解決策:**
+- リフレッシュトークン方式（推奨）：`get_share_url/.env` に `DROPBOX_APP_KEY`、`DROPBOX_APP_SECRET`、`DROPBOX_REFRESH_TOKEN` を追加
+- 短期トークン方式：`get_share_url/.env` に `DBX_TOKEN=sl.xxxxx` を追加
+
+### エラー: `トークン取得失敗` または `アクセストークン取得エラー`
+
+**原因1:** リフレッシュトークンが無効または期限切れ
+
+**解決策:** Dropbox App Consoleで新しいリフレッシュトークンを生成
+
+**原因2:** App KeyまたはApp Secretが間違っている
+
+**解決策:** Dropbox App Consoleで正しいApp KeyとApp Secretを確認
 
 ### 動画が表示されない
 

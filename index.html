@@ -359,6 +359,88 @@
             text-align: right;
             color: #888;
         }
+
+        /* URLフィルタセクション */
+        .filter-input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .filter-input-group input {
+            flex: 1;
+            padding: 8px 12px;
+            background-color: #1a1a1a;
+            border: 1px solid #4a4a4a;
+            border-radius: 4px;
+            color: #fff;
+            font-size: 14px;
+        }
+
+        .filter-input-group input:focus {
+            outline: none;
+            border-color: #007bff;
+        }
+
+        .filter-input-group button {
+            padding: 8px 16px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.2s;
+        }
+
+        .filter-input-group button:hover {
+            background-color: #0056b3;
+        }
+
+        .filter-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .filter-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 12px;
+            background-color: #1a1a1a;
+            border-radius: 4px;
+            border: 1px solid #4a4a4a;
+        }
+
+        .filter-item span {
+            flex: 1;
+            color: #ccc;
+            word-break: break-all;
+        }
+
+        .filter-item button {
+            padding: 4px 12px;
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: background-color 0.2s;
+            margin-left: 10px;
+        }
+
+        .filter-item button:hover {
+            background-color: #c82333;
+        }
+
+        .filter-empty {
+            text-align: center;
+            color: #888;
+            padding: 20px;
+            font-size: 14px;
+        }
     </style>
 </head>
 <body>
@@ -412,6 +494,28 @@
             </div>
         </div>
 
+        <div class="menu-section">
+            <h3>URLフィルタ</h3>
+
+            <h4 style="font-size: 13px; margin-bottom: 10px; color: #aaa;">除外キーワード</h4>
+            <div class="filter-input-group">
+                <input type="text" id="filterKeywordInput" placeholder="除外するキーワードを入力" />
+                <button id="addFilterBtn">追加</button>
+            </div>
+            <div class="filter-list" id="filterList">
+                <div class="filter-empty">フィルタが設定されていません</div>
+            </div>
+
+            <h4 style="font-size: 13px; margin-top: 20px; margin-bottom: 10px; color: #aaa;">許可キーワード</h4>
+            <div class="filter-input-group">
+                <input type="text" id="allowKeywordInput" placeholder="許可するキーワードを入力" />
+                <button id="addAllowBtn">追加</button>
+            </div>
+            <div class="filter-list" id="allowList">
+                <div class="filter-empty">許可キーワードが設定されていません</div>
+            </div>
+        </div>
+
     </div>
 
     <div class="video-grid" id="videoGrid"></div>
@@ -424,6 +528,8 @@
         const defaultLoadCount = 20;
         let dataUsageByDate = {}; // 日別データ使用量を記録 { '2025-11-06': { size: 0, count: 0 } }
         let totalDataUsage = 0; // 総データ使用量
+        let filterKeywords = []; // URL除外キーワード
+        let allowKeywords = []; // URL許可キーワード
 
         // ハンバーガーメニューの開閉
         const menuButton = document.getElementById('menuButton');
@@ -438,6 +544,181 @@
 
         menuButton.addEventListener('click', toggleMenu);
         overlayBackdrop.addEventListener('click', toggleMenu);
+
+        // URL除外フィルタ管理
+        function loadFilters() {
+            const saved = localStorage.getItem('urlFilters');
+            if (saved) {
+                filterKeywords = JSON.parse(saved);
+            }
+            displayFilters();
+        }
+
+        function saveFilters() {
+            localStorage.setItem('urlFilters', JSON.stringify(filterKeywords));
+        }
+
+        function displayFilters() {
+            const filterList = document.getElementById('filterList');
+            filterList.innerHTML = '';
+
+            if (filterKeywords.length === 0) {
+                filterList.innerHTML = '<div class="filter-empty">フィルタが設定されていません</div>';
+                return;
+            }
+
+            filterKeywords.forEach((keyword, index) => {
+                const item = document.createElement('div');
+                item.className = 'filter-item';
+
+                const span = document.createElement('span');
+                span.textContent = keyword;
+
+                const deleteBtn = document.createElement('button');
+                deleteBtn.textContent = '削除';
+                deleteBtn.addEventListener('click', () => {
+                    removeFilter(index);
+                });
+
+                item.appendChild(span);
+                item.appendChild(deleteBtn);
+                filterList.appendChild(item);
+            });
+        }
+
+        function addFilter() {
+            const input = document.getElementById('filterKeywordInput');
+            const keyword = input.value.trim();
+
+            if (!keyword) {
+                alert('キーワードを入力してください');
+                return;
+            }
+
+            if (filterKeywords.includes(keyword)) {
+                alert('このキーワードは既に登録されています');
+                return;
+            }
+
+            filterKeywords.push(keyword);
+            saveFilters();
+            displayFilters();
+            input.value = '';
+
+            console.log('除外フィルタ追加:', keyword);
+        }
+
+        function removeFilter(index) {
+            const removed = filterKeywords.splice(index, 1);
+            saveFilters();
+            displayFilters();
+            console.log('除外フィルタ削除:', removed[0]);
+        }
+
+        // URL許可キーワード管理
+        function loadAllowKeywords() {
+            const saved = localStorage.getItem('urlAllowKeywords');
+            if (saved) {
+                allowKeywords = JSON.parse(saved);
+            }
+            displayAllowKeywords();
+        }
+
+        function saveAllowKeywords() {
+            localStorage.setItem('urlAllowKeywords', JSON.stringify(allowKeywords));
+        }
+
+        function displayAllowKeywords() {
+            const allowList = document.getElementById('allowList');
+            allowList.innerHTML = '';
+
+            if (allowKeywords.length === 0) {
+                allowList.innerHTML = '<div class="filter-empty">許可キーワードが設定されていません</div>';
+                return;
+            }
+
+            allowKeywords.forEach((keyword, index) => {
+                const item = document.createElement('div');
+                item.className = 'filter-item';
+
+                const span = document.createElement('span');
+                span.textContent = keyword;
+
+                const deleteBtn = document.createElement('button');
+                deleteBtn.textContent = '削除';
+                deleteBtn.addEventListener('click', () => {
+                    removeAllowKeyword(index);
+                });
+
+                item.appendChild(span);
+                item.appendChild(deleteBtn);
+                allowList.appendChild(item);
+            });
+        }
+
+        function addAllowKeyword() {
+            const input = document.getElementById('allowKeywordInput');
+            const keyword = input.value.trim();
+
+            if (!keyword) {
+                alert('キーワードを入力してください');
+                return;
+            }
+
+            if (allowKeywords.includes(keyword)) {
+                alert('このキーワードは既に登録されています');
+                return;
+            }
+
+            allowKeywords.push(keyword);
+            saveAllowKeywords();
+            displayAllowKeywords();
+            input.value = '';
+
+            console.log('許可キーワード追加:', keyword);
+        }
+
+        function removeAllowKeyword(index) {
+            const removed = allowKeywords.splice(index, 1);
+            saveAllowKeywords();
+            displayAllowKeywords();
+            console.log('許可キーワード削除:', removed[0]);
+        }
+
+        function shouldFilterUrl(url) {
+            // 除外キーワードチェック：いずれかを含む場合は除外
+            const isExcluded = filterKeywords.some(keyword => url.includes(keyword));
+            if (isExcluded) {
+                return true; // 除外
+            }
+
+            // 許可キーワードチェック：許可キーワードが設定されている場合のみチェック
+            if (allowKeywords.length > 0) {
+                // いずれかの許可キーワードを含む場合のみ許可
+                const isAllowed = allowKeywords.some(keyword => url.includes(keyword));
+                return !isAllowed; // 許可されていない場合は除外
+            }
+
+            // 許可キーワードが設定されていない場合は、除外されていなければ許可
+            return false;
+        }
+
+        // フィルタ追加ボタンのイベントリスナー
+        document.getElementById('addFilterBtn').addEventListener('click', addFilter);
+        document.getElementById('addAllowBtn').addEventListener('click', addAllowKeyword);
+
+        // Enterキーでも追加できるようにする
+        document.getElementById('filterKeywordInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                addFilter();
+            }
+        });
+
+        document.getElementById('allowKeywordInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                addAllowKeyword();
+            }
+        });
 
         // データ使用量を更新
         function updateDataUsage(videoSize, date) {
@@ -649,12 +930,27 @@
 
             status.style.display = 'none';
 
-            // 読み込む範囲を決定
-            const endIndex = Math.min(currentIndex + count, allUrls.length);
-            const urlsToLoad = allUrls.slice(currentIndex, endIndex);
+            // フィルタを適用しながら指定件数分のURLを収集
+            const urlsToLoad = [];
+            let index = currentIndex;
 
-            urlsToLoad.forEach((originalUrl, relativeIndex) => {
-                const absoluteIndex = currentIndex + relativeIndex;
+            while (urlsToLoad.length < count && index < allUrls.length) {
+                const url = allUrls[index];
+
+                // フィルタチェック：フィルタに一致しない場合のみ追加
+                if (!shouldFilterUrl(url)) {
+                    urlsToLoad.push({ url, originalIndex: index });
+                } else {
+                    console.log('フィルタで除外:', url);
+                }
+
+                index++;
+            }
+
+            // currentIndexを更新
+            currentIndex = index;
+
+            urlsToLoad.forEach(({ url: originalUrl, originalIndex: absoluteIndex }) => {
                 const convertedUrl = convertDropboxUrl(originalUrl);
                 if (!convertedUrl) return;
 
@@ -904,8 +1200,6 @@
                     videoItem.innerHTML = `<div style="padding: 20px; text-align: center; color: #888;">動画${absoluteIndex + 1}<br/>読み込みエラー</div>`;
                 });
             });
-
-            currentIndex = endIndex;
         }
 
         // 自動読み込みフラグ
@@ -960,6 +1254,10 @@
 
         // ページ読み込み時にCSVデータを読み込み
         window.addEventListener('load', () => {
+            // URLフィルタを読み込む
+            loadFilters();
+            loadAllowKeywords();
+
             // usage.csvを読み込む（優先）
             loadUsageCSV();
 

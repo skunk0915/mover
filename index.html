@@ -598,6 +598,7 @@
         let globalLoopEnabled = true; // 全動画のリピート設定
         let videoGroups = new Set(); // 動画グループ名のセット
         let groupStates = {}; // グループのON/OFF状態 { 'clean': true, 'other': false }
+        let groupOrders = {}; // グループの表示順序 { 'clean': 0, 'other': 1 }
 
         // ハンバーガーメニューの開閉
         const menuButton = document.getElementById('menuButton');
@@ -656,7 +657,28 @@
             // グループボタンを表示
             displayGroupButtons();
 
+            // 動画をグループ順序でソート
+            sortUrlsByGroupOrder();
+
             console.log('検出されたグループ:', Array.from(videoGroups));
+        }
+
+        // URLをグループ順序でソートする関数
+        function sortUrlsByGroupOrder() {
+            allUrls.sort((urlA, urlB) => {
+                const groupA = extractGroupFromUrl(urlA);
+                const groupB = extractGroupFromUrl(urlB);
+
+                const orderA = groupOrders[groupA] !== undefined ? groupOrders[groupA] : 999999;
+                const orderB = groupOrders[groupB] !== undefined ? groupOrders[groupB] : 999999;
+
+                // グループ順序が同じ場合はURL文字列順
+                if (orderA === orderB) {
+                    return urlA.localeCompare(urlB);
+                }
+
+                return orderA - orderB;
+            });
         }
 
         // グループ状態を読み込む
@@ -670,6 +692,7 @@
 
                 if (data.success) {
                     groupStates = data.groupStates;
+                    groupOrders = data.groupOrders || {};
                     console.log('✓ サーバーからグループ状態を取得しました');
                 }
             } catch (err) {
@@ -680,12 +703,23 @@
                     groupStates = JSON.parse(saved);
                     console.log('LocalStorageからグループ状態を読み込みました');
                 }
+                const savedOrders = localStorage.getItem('videoGroupOrders');
+                if (savedOrders) {
+                    groupOrders = JSON.parse(savedOrders);
+                    console.log('LocalStorageからグループ順序を読み込みました');
+                }
             }
 
             // 新しいグループがあればデフォルトでONにする
+            // また、順序が未設定の場合は最大値+1を設定
+            let maxOrder = Math.max(...Object.values(groupOrders), -1);
             videoGroups.forEach(groupName => {
                 if (!(groupName in groupStates)) {
                     groupStates[groupName] = true;
+                }
+                if (!(groupName in groupOrders)) {
+                    maxOrder++;
+                    groupOrders[groupName] = maxOrder;
                 }
             });
         }
@@ -724,6 +758,36 @@
             }
         }
 
+        // グループ順序を保存
+        async function saveGroupOrders() {
+            // サーバーに送信（非同期）
+            try {
+                const response = await fetch('api/group-states.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        groupOrders: groupOrders
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to save group orders to server');
+                }
+
+                const result = await response.json();
+                if (result.success) {
+                    console.log('✓ サーバーにグループ順序を保存しました');
+                }
+            } catch (err) {
+                console.error('サーバーへのグループ順序保存に失敗しました:', err);
+                // フォールバック: LocalStorageに保存
+                localStorage.setItem('videoGroupOrders', JSON.stringify(groupOrders));
+                console.log('LocalStorageに保存しました');
+            }
+        }
+
         // グループボタンを表示
         function displayGroupButtons() {
             const groupFilterSection = document.getElementById('groupFilterSection');
@@ -738,14 +802,27 @@
                 return;
             }
 
-            // グループ名をアルファベット順にソート
-            const sortedGroups = Array.from(videoGroups).sort();
+            // グループ名をdisplay_order順にソート
+            const sortedGroups = Array.from(videoGroups).sort((a, b) => {
+                const orderA = groupOrders[a] !== undefined ? groupOrders[a] : 999999;
+                const orderB = groupOrders[b] !== undefined ? groupOrders[b] : 999999;
+                return orderA - orderB;
+            });
 
             sortedGroups.forEach(groupName => {
                 const item = document.createElement('div');
                 item.className = 'filter-item';
-                item.style.cursor = 'pointer';
+                item.style.cursor = 'grab';
                 item.style.userSelect = 'none';
+                item.draggable = true;
+                item.dataset.groupName = groupName;
+
+                // ドラッグハンドルアイコンを追加
+                const dragHandle = document.createElement('span');
+                dragHandle.textContent = '⋮⋮';
+                dragHandle.style.marginRight = '8px';
+                dragHandle.style.cursor = 'grab';
+                dragHandle.style.color = '#999';
 
                 const checkbox = document.createElement('input');
                 checkbox.type = 'checkbox';
@@ -772,22 +849,84 @@
                     reloadVideos();
                 });
 
-                // アイテムクリックでもトグル
+                // アイテムクリックでもトグル（ドラッグハンドル以外）
                 item.addEventListener('click', (e) => {
-                    if (e.target !== checkbox) {
+                    if (e.target !== checkbox && e.target !== dragHandle) {
                         checkbox.checked = !checkbox.checked;
                         checkbox.dispatchEvent(new Event('change'));
                     }
                 });
 
+                // ドラッグ開始
+                item.addEventListener('dragstart', (e) => {
+                    e.dataTransfer.effectAllowed = 'move';
+                    e.dataTransfer.setData('text/plain', groupName);
+                    item.style.opacity = '0.5';
+                });
+
+                // ドラッグ終了
+                item.addEventListener('dragend', (e) => {
+                    item.style.opacity = '1';
+                });
+
+                // ドラッグオーバー
+                item.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+
+                    const draggingItem = document.querySelector('.filter-item[style*="opacity: 0.5"]');
+                    if (draggingItem && draggingItem !== item) {
+                        const rect = item.getBoundingClientRect();
+                        const midpoint = rect.top + rect.height / 2;
+
+                        if (e.clientY < midpoint) {
+                            groupList.insertBefore(draggingItem, item);
+                        } else {
+                            groupList.insertBefore(draggingItem, item.nextSibling);
+                        }
+                    }
+                });
+
+                // ドロップ
+                item.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    // 新しい順序を保存
+                    updateGroupOrdersFromDOM();
+                });
+
+                item.appendChild(dragHandle);
                 item.appendChild(checkbox);
                 item.appendChild(label);
                 groupList.appendChild(item);
             });
         }
 
+        // DOM要素の順序からgroupOrdersを更新
+        function updateGroupOrdersFromDOM() {
+            const groupList = document.getElementById('groupList');
+            const items = groupList.querySelectorAll('.filter-item');
+
+            items.forEach((item, index) => {
+                const groupName = item.dataset.groupName;
+                if (groupName) {
+                    groupOrders[groupName] = index;
+                }
+            });
+
+            // サーバーに保存
+            saveGroupOrders();
+
+            // 動画一覧を再読み込み
+            reloadVideos();
+        }
+
         // 動画を再読み込み（フィルタ変更時）
         function reloadVideos() {
+            // URLをグループ順序でソート
+            sortUrlsByGroupOrder();
+
             // 現在表示されている動画をクリア
             const grid = document.getElementById('videoGrid');
             grid.innerHTML = '';

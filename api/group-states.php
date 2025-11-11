@@ -26,10 +26,17 @@ try {
     ");
 
     // display_orderカラムが存在しない場合は追加（既存テーブル対応）
-    $pdo->exec("
-        ALTER TABLE group_states
-        ADD COLUMN IF NOT EXISTS display_order INT NOT NULL DEFAULT 0
-    ");
+    try {
+        $pdo->exec("
+            ALTER TABLE group_states
+            ADD COLUMN display_order INT NOT NULL DEFAULT 0
+        ");
+    } catch (PDOException $e) {
+        // カラムが既に存在する場合はエラーを無視
+        if (strpos($e->getMessage(), 'Duplicate column name') === false) {
+            throw $e;
+        }
+    }
 
     if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         // グループ状態を取得

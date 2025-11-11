@@ -1,0 +1,15 @@
+{
+  "name": "amazon-book-cover-finder",
+  "version": "1.0.0",
+  "description": "Amazon PA-APIを使って書籍の表紙画像URLを取得するツール",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "aws4": "^1.12.0",
+    "axios": "^1.6.0",
+    "dotenv": "^16.3.1",
+    "xml2js": "^0.6.2"
+  }
+}

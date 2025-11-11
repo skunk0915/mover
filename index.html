@@ -552,6 +552,13 @@
             </div>
         </div>
 
+        <div class="menu-section" id="groupFilterSection">
+            <h3>グループフィルタ</h3>
+            <div class="filter-list" id="groupList">
+                <div class="filter-empty">グループを読み込み中...</div>
+            </div>
+        </div>
+
         <div class="menu-section">
             <h3>URLフィルタ</h3>
 
@@ -589,6 +596,8 @@
         let filterKeywords = []; // URL除外キーワード
         let allowKeywords = []; // URL許可キーワード
         let globalLoopEnabled = true; // 全動画のリピート設定
+        let videoGroups = new Set(); // 動画グループ名のセット
+        let groupStates = {}; // グループのON/OFF状態 { 'clean': true, 'other': false }
 
         // ハンバーガーメニューの開閉
         const menuButton = document.getElementById('menuButton');
@@ -603,6 +612,192 @@
 
         menuButton.addEventListener('click', toggleMenu);
         overlayBackdrop.addEventListener('click', toggleMenu);
+
+        // URLからグループ名を抽出する関数
+        function extractGroupFromUrl(url) {
+            try {
+                // URLからファイル名を抽出
+                const urlObj = new URL(url);
+                const pathname = urlObj.pathname;
+                const filename = pathname.substring(pathname.lastIndexOf('/') + 1);
+
+                // ファイル名から「_」より前の部分を取得
+                const underscoreIndex = filename.indexOf('_');
+                if (underscoreIndex > 0) {
+                    return filename.substring(0, underscoreIndex);
+                }
+
+                // 「_」が見つからない場合は、拡張子を除いたファイル名全体をグループ名とする
+                const dotIndex = filename.lastIndexOf('.');
+                if (dotIndex > 0) {
+                    return filename.substring(0, dotIndex);
+                }
+
+                return filename || 'その他';
+            } catch (e) {
+                console.error('グループ名抽出エラー:', e, url);
+                return 'その他';
+            }
+        }
+
+        // グループ情報を初期化する関数
+        async function initializeGroups() {
+            videoGroups.clear();
+
+            // すべてのURLからグループ名を抽出
+            allUrls.forEach(url => {
+                const groupName = extractGroupFromUrl(url);
+                videoGroups.add(groupName);
+            });
+
+            // グループ状態を読み込む
+            await loadGroupStates();
+
+            // グループボタンを表示
+            displayGroupButtons();
+
+            console.log('検出されたグループ:', Array.from(videoGroups));
+        }
+
+        // グループ状態を読み込む
+        async function loadGroupStates() {
+            try {
+                const response = await fetch('api/group-states.php');
+                if (!response.ok) {
+                    throw new Error('Failed to fetch group states from server');
+                }
+                const data = await response.json();
+
+                if (data.success) {
+                    groupStates = data.groupStates;
+                    console.log('✓ サーバーからグループ状態を取得しました');
+                }
+            } catch (err) {
+                console.error('サーバーからグループ状態を取得できませんでした:', err);
+                // フォールバック: LocalStorageから読み込む
+                const saved = localStorage.getItem('videoGroupStates');
+                if (saved) {
+                    groupStates = JSON.parse(saved);
+                    console.log('LocalStorageからグループ状態を読み込みました');
+                }
+            }
+
+            // 新しいグループがあればデフォルトでONにする
+            videoGroups.forEach(groupName => {
+                if (!(groupName in groupStates)) {
+                    groupStates[groupName] = true;
+                }
+            });
+        }
+
+        // グループ状態を保存
+        async function saveGroupState(groupName, isEnabled) {
+            // ローカルで即座に更新
+            groupStates[groupName] = isEnabled;
+
+            // サーバーに送信（非同期）
+            try {
+                const response = await fetch('api/group-states.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        groupName: groupName,
+                        isEnabled: isEnabled
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to save group state to server');
+                }
+
+                const result = await response.json();
+                if (result.success) {
+                    console.log('✓ サーバーにグループ状態を保存しました');
+                }
+            } catch (err) {
+                console.error('サーバーへのグループ状態保存に失敗しました:', err);
+                // フォールバック: LocalStorageに保存
+                localStorage.setItem('videoGroupStates', JSON.stringify(groupStates));
+                console.log('LocalStorageに保存しました');
+            }
+        }
+
+        // グループボタンを表示
+        function displayGroupButtons() {
+            const groupFilterSection = document.getElementById('groupFilterSection');
+            const groupList = document.getElementById('groupList');
+
+            if (!groupFilterSection || !groupList) return;
+
+            groupList.innerHTML = '';
+
+            if (videoGroups.size === 0) {
+                groupList.innerHTML = '<div class="filter-empty">グループが見つかりません</div>';
+                return;
+            }
+
+            // グループ名をアルファベット順にソート
+            const sortedGroups = Array.from(videoGroups).sort();
+
+            sortedGroups.forEach(groupName => {
+                const item = document.createElement('div');
+                item.className = 'filter-item';
+                item.style.cursor = 'pointer';
+                item.style.userSelect = 'none';
+
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.checked = groupStates[groupName] !== false;
+                checkbox.id = `group-${groupName}`;
+                checkbox.style.width = 'auto';
+                checkbox.style.height = 'auto';
+                checkbox.style.cursor = 'pointer';
+                checkbox.style.marginRight = '10px';
+
+                const label = document.createElement('label');
+                label.htmlFor = `group-${groupName}`;
+                label.textContent = groupName;
+                label.style.flex = '1';
+                label.style.cursor = 'pointer';
+
+                // チェックボックス変更イベント
+                checkbox.addEventListener('change', (e) => {
+                    const isEnabled = e.target.checked;
+                    saveGroupState(groupName, isEnabled);
+                    console.log(`グループ「${groupName}」:`, isEnabled ? 'ON' : 'OFF');
+
+                    // 動画を再読み込み
+                    reloadVideos();
+                });
+
+                // アイテムクリックでもトグル
+                item.addEventListener('click', (e) => {
+                    if (e.target !== checkbox) {
+                        checkbox.checked = !checkbox.checked;
+                        checkbox.dispatchEvent(new Event('change'));
+                    }
+                });
+
+                item.appendChild(checkbox);
+                item.appendChild(label);
+                groupList.appendChild(item);
+            });
+        }
+
+        // 動画を再読み込み（フィルタ変更時）
+        function reloadVideos() {
+            // 現在表示されている動画をクリア
+            const grid = document.getElementById('videoGrid');
+            grid.innerHTML = '';
+
+            // インデックスをリセット
+            currentIndex = 0;
+
+            // 動画を再読み込み
+            loadMoreVideos(defaultLoadCount);
+        }
 
         // URL除外フィルタ管理
         function loadFilters() {
@@ -745,6 +940,12 @@
         }
 
         function shouldFilterUrl(url) {
+            // グループフィルタチェック：グループがOFFの場合は除外
+            const groupName = extractGroupFromUrl(url);
+            if (groupStates[groupName] === false) {
+                return true; // 除外
+            }
+
             // 除外キーワードチェック：いずれかを含む場合は除外
             const isExcluded = filterKeywords.some(keyword => url.includes(keyword));
             if (isExcluded) {
@@ -1346,10 +1547,14 @@
                     if (!response.ok) throw new Error('urls.csvが見つかりません');
                     return response.text();
                 })
-                .then(text => {
+                .then(async text => {
                     console.log('urls.csvを読み込みました');
                     allUrls = parseCSV(text);
                     currentIndex = 0;
+
+                    // グループ情報を初期化
+                    await initializeGroups();
+
                     // 最初にデフォルト件数を読み込み
                     loadMoreVideos(defaultLoadCount);
                 })
